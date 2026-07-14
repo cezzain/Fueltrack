@@ -53,5 +53,5 @@ export function generateWeeklyInsights(
 
 /** Display name of the active model, for footers/labels. */
 export function activeModelLabel(settings: Settings): string {
-  return settings.provider === 'gemini' ? 'gemini-2.5-flash' : 'claude-sonnet-4-6';
+  return settings.provider === 'gemini' ? 'gemini-flash-latest' : 'claude-sonnet-4-6';
 }

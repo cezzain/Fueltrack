@@ -8,8 +8,13 @@ import {
 } from './claude';
 import { formatDayLabel } from './dates';
 
-/** Google AI Studio (Gemini API) — vision-capable, browser-callable with an API key. */
-const MODEL = 'gemini-2.5-flash';
+/**
+ * Google AI Studio (Gemini API) — vision-capable, browser-callable with an
+ * API key. Uses Google's rolling "-latest" alias (not a dated snapshot like
+ * "gemini-2.5-flash") so this doesn't break again when Google retires a
+ * specific model version for new API keys.
+ */
+const MODEL = 'gemini-flash-latest';
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 interface GeminiPart {
