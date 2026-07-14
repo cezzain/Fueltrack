@@ -89,13 +89,13 @@ export function Insights() {
   } else if (error) {
     body = (
       <>
-        <section className="animate-rise rounded-2xl border border-edge bg-surface p-4">
-          <h2 className="text-sm font-semibold text-ink">Couldn&rsquo;t generate insights</h2>
+        <section className="animate-rise border-[1.5px] border-danger bg-surface p-4">
+          <h2 className="serif text-[18px] italic text-ink">Couldn&rsquo;t generate insights</h2>
           <p className="mt-1 text-sm leading-relaxed text-ink-dim">{error.message}</p>
           <button
             type="button"
             onClick={() => void generate()}
-            className="mt-3 min-h-11 w-full rounded-xl bg-accent-dim px-4 py-3 text-sm font-medium text-accent-bright active:scale-[0.98]"
+            className="label-caps mt-3 min-h-11 w-full border-[1.5px] border-edge bg-accent px-4 py-3 text-[11px] text-surface active:translate-y-px"
           >
             Retry
           </button>
@@ -131,8 +131,8 @@ export function Insights() {
     );
   } else if (!hasKey) {
     body = (
-      <section className="animate-rise rounded-2xl border border-edge bg-surface p-4">
-        <h2 className="text-sm font-semibold text-ink">Add your API key</h2>
+      <section className="animate-rise border-[1.5px] border-edge bg-surface p-4">
+        <h2 className="serif text-[18px] text-ink">Add your API key</h2>
         <p className="mt-1 text-sm leading-relaxed text-ink-dim">
           Weekly insights are written by {settings.provider === 'gemini' ? 'Gemini' : 'Claude'} using
           your own API key. Add it once in Settings — it stays on this device.
@@ -140,7 +140,7 @@ export function Insights() {
         <button
           type="button"
           onClick={() => setTab('settings')}
-          className="mt-3 min-h-11 w-full rounded-xl bg-accent-dim px-4 py-3 text-sm font-medium text-accent-bright active:scale-[0.98]"
+          className="label-caps mt-3 min-h-11 w-full border-[1.5px] border-edge px-4 py-3 text-[11px] text-ink active:translate-y-px"
         >
           Open Settings
         </button>
@@ -149,8 +149,8 @@ export function Insights() {
   } else {
     // Online is false and there is no cache to fall back to.
     body = (
-      <section className="animate-rise rounded-2xl border border-edge bg-surface p-4">
-        <h2 className="text-sm font-semibold text-ink">You&rsquo;re offline</h2>
+      <section className="animate-rise border-[1.5px] border-edge bg-surface p-4">
+        <h2 className="serif text-[18px] italic text-ink">You&rsquo;re offline</h2>
         <p className="mt-1 text-sm leading-relaxed text-ink-dim">
           No summary is cached yet, and generating one needs a connection. Your week will be read
           the next time you&rsquo;re online.
@@ -160,10 +160,10 @@ export function Insights() {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <header className="mb-1">
-        <h1 className="text-xl font-bold text-ink">Insights</h1>
-        <p className="mt-0.5 text-sm text-ink-dim">
+    <div className="flex flex-col gap-4">
+      <header className="mb-1 mt-5">
+        <h1 className="serif text-[40px] leading-none text-ink">Insights</h1>
+        <p className="mt-2 text-[13px] text-ink-faint">
           Your week, read by {settings.provider === 'gemini' ? 'Gemini' : 'Claude'}
         </p>
       </header>
@@ -229,25 +229,27 @@ function InsightsBody({
       </div>
 
       {stale && !online && (
-        <div className="animate-rise rounded-xl border border-edge bg-surface px-3 py-2 text-xs leading-relaxed text-ink-dim">
+        <div className="serif animate-rise border border-hairline bg-surface px-3 py-2 text-[13px] italic leading-relaxed text-ink-dim">
           Offline — showing last week&rsquo;s summary from {formatDayLabel(cached.dateKey)}
         </div>
       )}
 
       {days && <WeekChart days={days} target={target} todayKey={todayKey} />}
 
-      <section className="animate-rise rounded-2xl border border-edge bg-surface p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Summary</h2>
-        <p className="mt-2 text-sm leading-relaxed text-ink">{insights.summary}</p>
+      {/* Summary as an editorial pull-quote */}
+      <section className="animate-rise border-l-4 border-accent py-1 pl-4">
+        <p className="serif text-[20px] italic leading-[1.35] text-ink">
+          &ldquo;{insights.summary}&rdquo;
+        </p>
       </section>
 
       {insights.trends.length > 0 && (
-        <section className="animate-rise rounded-2xl border border-edge bg-surface p-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Trends</h2>
+        <section className="animate-rise border-[1.5px] border-edge bg-surface p-4">
+          <h2 className="label-caps text-[11px] tracking-[0.12em] text-ink">Trends</h2>
           <ul className="mt-2 flex flex-col gap-2">
             {insights.trends.map((trend, i) => (
               <li key={i} className="flex items-start gap-2.5">
-                <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                <span className="mt-[7px] h-1.5 w-1.5 shrink-0 bg-accent" />
                 <span className="text-sm leading-relaxed text-ink-dim">{trend}</span>
               </li>
             ))}
@@ -258,11 +260,11 @@ function InsightsBody({
       <BestWorst insights={insights} />
 
       {insights.suggestion && (
-        <section className="animate-rise rounded-2xl border border-accent/30 bg-accent-dim p-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-accent-bright">
+        <section className="animate-rise border-[1.5px] border-edge bg-ink p-5 text-surface">
+          <h2 className="label-caps text-[10px] tracking-[0.12em] text-accent-on-dark">
             One thing to try
           </h2>
-          <p className="mt-2 text-sm leading-relaxed text-ink">{insights.suggestion}</p>
+          <p className="serif mt-2 text-[18px] leading-[1.4]">{insights.suggestion}</p>
         </section>
       )}
     </>
@@ -274,24 +276,22 @@ function BestWorst({ insights }: { insights: WeeklyInsights }) {
   const worst = insights.worst_day.dateKey ? insights.worst_day : null;
   if (!best && !worst) return null;
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="animate-rise flex border-[1.5px] border-edge bg-surface">
       {best && (
-        <div
-          className={`animate-rise rounded-2xl border border-accent/30 bg-surface p-4 ${worst ? '' : 'col-span-2'}`}
-        >
-          <div className="text-xs font-medium text-accent-bright">Best day</div>
-          <div className="mt-1 text-sm font-semibold text-ink">{formatDayLabel(best.dateKey)}</div>
-          {best.reason && <p className="mt-1 text-xs leading-relaxed text-ink-dim">{best.reason}</p>}
+        <div className={`flex-1 p-3.5 ${worst ? 'border-r border-edge' : ''}`}>
+          <div className="label-caps text-[10px] tracking-[0.1em] text-accent">Best day</div>
+          <div className="serif mt-1 text-[18px] text-ink">{formatDayLabel(best.dateKey)}</div>
+          {best.reason && (
+            <p className="mt-1 text-[11px] leading-[1.5] text-ink-faint">{best.reason}</p>
+          )}
         </div>
       )}
       {worst && (
-        <div
-          className={`animate-rise rounded-2xl border border-edge bg-surface p-4 ${best ? '' : 'col-span-2'}`}
-        >
-          <div className="text-xs font-medium text-warn">Needs work</div>
-          <div className="mt-1 text-sm font-semibold text-ink">{formatDayLabel(worst.dateKey)}</div>
+        <div className="flex-1 p-3.5">
+          <div className="label-caps text-[10px] tracking-[0.1em] text-ink-faint">Needs work</div>
+          <div className="serif mt-1 text-[18px] text-ink">{formatDayLabel(worst.dateKey)}</div>
           {worst.reason && (
-            <p className="mt-1 text-xs leading-relaxed text-ink-dim">{worst.reason}</p>
+            <p className="mt-1 text-[11px] leading-[1.5] text-ink-faint">{worst.reason}</p>
           )}
         </div>
       )}
@@ -311,11 +311,11 @@ function WeekChart({
   todayKey: string;
 }) {
   return (
-    <section className="animate-rise rounded-2xl border border-edge bg-surface p-4">
+    <section className="animate-rise border-[1.5px] border-edge bg-surface p-4">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold text-ink">This week</h2>
+        <h2 className="label-caps text-[11px] tracking-[0.12em] text-ink">This week</h2>
         <span className="text-[10px] text-ink-faint">
-          protein vs <span className="num">{target}g</span> target
+          vs <span className="num">{target}g</span> target
         </span>
       </div>
       <div className="mt-4 flex items-end justify-between px-1">
@@ -324,26 +324,17 @@ function WeekChart({
           const hit = target > 0 && day.protein_g >= target;
           return (
             <div key={day.dateKey} className="flex flex-col items-center gap-1.5">
-              <div className="flex h-2 items-center justify-center">
-                {day.lightDay && (
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-2 w-2 text-ink-faint"
-                    fill="currentColor"
-                    aria-label="Light day"
-                  >
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                  </svg>
-                )}
+              <div className="flex h-3 items-center justify-center text-[9px] text-ink-faint">
+                {day.lightDay ? '☾' : ''}
               </div>
-              <div className="flex h-20 w-2.5 items-end overflow-hidden rounded-full bg-surface-2">
+              <div className="flex h-[76px] w-[22px] items-end border border-edge" style={{ padding: 1.5 }}>
                 <div
-                  className={`w-full rounded-full ${hit ? 'bg-accent-bright' : 'bg-accent'}`}
+                  className={`w-full ${hit ? 'bg-accent' : 'bg-ink'}`}
                   style={{ height: `${pct}%`, minHeight: day.protein_g > 0 ? '4px' : '0' }}
                 />
               </div>
               <span
-                className={`text-[10px] ${day.dateKey === todayKey ? 'font-semibold text-ink-dim' : 'text-ink-faint'}`}
+                className={`text-[10px] ${day.dateKey === todayKey ? 'font-bold text-ink' : 'text-ink-faint'}`}
               >
                 {weekdayInitial(day.dateKey)}
               </span>

@@ -7,12 +7,12 @@ import { todayKey } from '../lib/dates';
 
 function Section({ title, chip, children }: { title: string; chip?: ReactNode; children: ReactNode }) {
   return (
-    <section>
-      <div className="mb-2 flex items-center justify-between px-1">
-        <h2 className="text-sm uppercase tracking-wide text-ink-dim">{title}</h2>
+    <section className="border-[1.5px] border-edge bg-surface p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="label-caps text-[10px] tracking-[0.12em] text-ink-faint">{title}</h2>
         {chip}
       </div>
-      <div className="rounded-2xl border border-edge bg-surface p-4">{children}</div>
+      {children}
     </section>
   );
 }
@@ -55,7 +55,7 @@ function NumberField({ label, value, min, max, onCommit }: NumberFieldProps) {
       <input
         type="number"
         inputMode="numeric"
-        className="num h-12 w-full rounded-xl bg-surface-2 px-3 text-sm text-ink outline-none focus:ring-1 focus:ring-accent/50"
+        className="num h-11 w-full border-[1.5px] border-edge bg-bg px-3 text-sm text-ink outline-none focus:border-accent"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onFocus={(e) => {
@@ -139,23 +139,19 @@ export function Settings() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="px-1 text-lg font-semibold text-ink">Settings</h1>
+      <h1 className="serif mt-5 text-[40px] leading-none text-ink">Settings</h1>
 
       <Section
         title="AI provider"
         chip={
           hasKey ? (
-            <span className="rounded-md bg-accent-dim px-1.5 py-0.5 text-[10px] font-medium text-accent-bright">
-              key set ✓
-            </span>
+            <span className="label-caps text-[10px] tracking-[0.08em] text-accent">key set ✓</span>
           ) : (
-            <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-ink-faint">
-              no key
-            </span>
+            <span className="label-caps text-[10px] tracking-[0.08em] text-ink-faint">no key</span>
           )
         }
       >
-        <div className="flex gap-1 rounded-xl bg-surface-2 p-1" role="radiogroup" aria-label="AI provider">
+        <div className="flex border-[1.5px] border-edge" role="radiogroup" aria-label="AI provider">
           {(
             [
               { id: 'claude', label: 'Claude' },
@@ -168,8 +164,8 @@ export function Settings() {
               role="radio"
               aria-checked={settings.provider === p.id}
               onClick={() => updateSettings({ provider: p.id })}
-              className={`h-11 flex-1 rounded-lg text-sm font-medium transition-colors active:scale-[0.98] ${
-                settings.provider === p.id ? 'bg-surface text-ink' : 'text-ink-dim'
+              className={`h-10 flex-1 text-[12px] font-semibold transition-colors first:border-r first:border-edge ${
+                settings.provider === p.id ? 'bg-ink text-surface' : 'bg-transparent text-ink-faint'
               }`}
             >
               {p.label}
@@ -185,7 +181,7 @@ export function Settings() {
             autoCorrect="off"
             spellCheck={false}
             placeholder={isGemini ? 'AIza…' : 'sk-ant-…'}
-            className="h-12 w-full rounded-xl bg-surface-2 px-3 pr-12 font-mono text-sm text-ink outline-none placeholder:text-ink-faint focus:ring-1 focus:ring-accent/50"
+            className="h-11 w-full border-[1.5px] border-edge bg-bg px-3 pr-12 font-mono text-[13px] text-ink outline-none placeholder:text-ink-faint focus:border-accent"
             value={isGemini ? settings.geminiApiKey : settings.apiKey}
             onChange={(e) =>
               updateSettings(isGemini ? { geminiApiKey: e.target.value } : { apiKey: e.target.value })
@@ -195,7 +191,7 @@ export function Settings() {
           <button
             type="button"
             onClick={() => setShowKey((s) => !s)}
-            className="absolute right-0 top-0 flex h-12 w-12 items-center justify-center rounded-xl text-ink-dim active:scale-[0.98]"
+            className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-ink-dim active:translate-y-px"
             aria-label={showKey ? 'Hide API key' : 'Show API key'}
           >
             <EyeIcon off={showKey} />
@@ -250,7 +246,7 @@ export function Settings() {
             onCommit={(calorieTarget_kcal) => updateSettings({ calorieTarget_kcal })}
           />
         </div>
-        <p className="mt-3 text-xs text-ink-faint">Targets update the rings instantly.</p>
+        <p className="mt-3 text-xs text-ink-faint">Targets update the bars instantly.</p>
       </Section>
 
       <Section title="Profile">
@@ -277,9 +273,9 @@ export function Settings() {
         <button
           type="button"
           onClick={() => void handleExport()}
-          className="h-12 w-full rounded-xl bg-surface-2 font-medium text-ink active:scale-[0.98]"
+          className="label-caps h-[50px] w-full border-[1.5px] border-edge text-[12px] tracking-[0.08em] text-ink active:translate-y-px"
         >
-          {exported ? <span className="text-accent-bright">Exported ✓</span> : 'Export data as JSON'}
+          {exported ? <span className="text-accent">Exported ✓</span> : 'Export data as JSON'}
         </button>
         <p className="mt-2 text-xs text-ink-faint">Photos stay on-device and aren't included.</p>
       </Section>

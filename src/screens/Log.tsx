@@ -194,7 +194,7 @@ export function Log() {
   };
 
   const mealTypePicker = (
-    <div className="flex gap-1.5" role="radiogroup" aria-label="Meal type">
+    <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Meal type">
       {MEAL_TYPES.map((t) => (
         <button
           key={t}
@@ -202,8 +202,8 @@ export function Log() {
           role="radio"
           aria-checked={mealType === t}
           onClick={() => setMealType(t)}
-          className={`h-11 flex-1 rounded-xl text-xs font-medium capitalize transition-colors active:scale-[0.98] ${
-            mealType === t ? 'bg-accent-dim text-accent-bright' : 'bg-surface text-ink-dim'
+          className={`h-[34px] border-[1.5px] border-edge px-3.5 text-[11px] font-semibold capitalize transition-colors ${
+            mealType === t ? 'bg-ink text-surface' : 'bg-transparent text-ink'
           }`}
         >
           {t}
@@ -213,18 +213,15 @@ export function Log() {
   );
 
   const apiKeyCard = (
-    <div className="rounded-2xl border border-edge bg-surface p-4">
-      <div className="flex items-start gap-2.5">
-        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-warn" aria-hidden="true" />
-        <p className="text-sm leading-relaxed text-ink">
-          Add your {settings.provider === 'gemini' ? 'Gemini' : 'Anthropic'} API key in Settings to
-          use AI analysis.
-        </p>
-      </div>
+    <div className="border-[1.5px] border-edge bg-surface p-4">
+      <p className="serif text-[16px] italic leading-relaxed text-ink">
+        Add your {settings.provider === 'gemini' ? 'Gemini' : 'Anthropic'} API key in Settings to
+        use AI analysis.
+      </p>
       <button
         type="button"
         onClick={() => setTab('settings')}
-        className="mt-3 h-11 w-full rounded-xl bg-surface-2 text-sm font-medium text-ink active:scale-[0.98]"
+        className="label-caps mt-3 h-11 w-full border-[1.5px] border-edge text-[11px] text-ink active:translate-y-px"
       >
         Open Settings
       </button>
@@ -236,17 +233,17 @@ export function Log() {
       type="button"
       onClick={runAnalysis}
       disabled={disabled}
-      className="h-12 w-full rounded-xl bg-accent font-semibold text-bg active:scale-[0.98] disabled:opacity-40"
+      className="label-caps h-[52px] w-full border-[1.5px] border-edge bg-accent text-[14px] tracking-[0.06em] text-surface shadow-offset-4 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none disabled:opacity-40 disabled:shadow-offset-4"
     >
-      Analyze
+      Analyze ↗
     </button>
   );
 
   return (
     <div className="space-y-4">
-      <header>
-        <h1 className="text-xl font-bold text-ink">Log a meal</h1>
-        <p className="mt-0.5 text-sm text-ink-dim">
+      <header className="mt-5">
+        <h1 className="serif text-[40px] leading-none text-ink">Log a meal</h1>
+        <p className="mt-2 text-[13px] text-ink-faint">
           {phase === 'review'
             ? 'Review the estimate — nothing saves until you confirm.'
             : 'Snap it, describe it, or type it in.'}
@@ -256,7 +253,7 @@ export function Log() {
       {phase === 'review' && analysis ? (
         <div className="space-y-3">
           {error && (
-            <div className="animate-rise rounded-2xl border border-danger/40 bg-surface p-3">
+            <div className="animate-rise border-[1.5px] border-danger bg-surface p-3">
               <p className="text-sm leading-relaxed text-ink">{error.message}</p>
             </div>
           )}
@@ -282,29 +279,28 @@ export function Log() {
             <img
               src={photo.dataUrl}
               alt="Meal being analyzed"
-              className="w-full rounded-2xl border border-edge opacity-70"
+              className="w-full border-[1.5px] border-edge opacity-70"
             />
           )}
           {mode === 'describe' && description.trim() && (
-            <div className="rounded-2xl border border-edge bg-surface p-4 text-sm leading-relaxed text-ink-dim">
+            <div className="border-[1.5px] border-edge bg-surface p-4 text-sm leading-relaxed text-ink-dim">
               {description}
             </div>
           )}
-          <div className="animate-rise flex flex-col items-center gap-3 rounded-2xl border border-edge bg-surface p-6">
-            <div
-              className="h-11 w-11 animate-spin rounded-full border-2 border-surface-2 border-t-accent"
-              aria-hidden="true"
-            />
-            <p key={statusIdx} className="animate-rise text-sm text-ink-dim" aria-live="polite">
+          <div className="animate-rise flex flex-col items-center gap-4 border-[1.5px] border-edge bg-surface px-6 py-9">
+            <p key={statusIdx} className="serif animate-rise text-[26px] italic text-ink" aria-live="polite">
               {STATUS_LINES[statusIdx]}
             </p>
+            <div className="h-1.5 w-40 border-[1.5px] border-edge" style={{ padding: 1.5 }}>
+              <div className="animate-pulse-w h-full bg-accent" aria-hidden="true" />
+            </div>
           </div>
         </div>
       ) : (
         <>
           {/* Mode switch */}
-          <div className="flex gap-1 rounded-xl bg-surface p-1">
-            {MODES.map((m) => (
+          <div className="flex border-[1.5px] border-edge">
+            {MODES.map((m, i) => (
               <button
                 key={m.id}
                 type="button"
@@ -313,9 +309,9 @@ export function Log() {
                   setMode(m.id);
                   setError(null);
                 }}
-                className={`h-11 flex-1 rounded-lg text-sm font-medium transition-colors active:scale-[0.98] ${
-                  mode === m.id ? 'bg-surface-2 text-ink' : 'text-ink-dim'
-                }`}
+                className={`label-caps h-[42px] flex-1 text-[11.5px] font-semibold tracking-[0.08em] transition-colors ${
+                  i < MODES.length - 1 ? 'border-r border-edge' : ''
+                } ${mode === m.id ? 'bg-ink text-surface' : 'bg-transparent text-ink-faint'}`}
               >
                 {m.label}
               </button>
@@ -325,13 +321,13 @@ export function Log() {
           {mealTypePicker}
 
           {!online && mode !== 'manual' && (
-            <div className="rounded-xl border border-edge bg-surface px-3 py-2.5 text-xs text-ink-dim">
+            <div className="serif border border-hairline bg-surface px-3 py-2.5 text-[13px] italic text-ink-dim">
               Offline — AI analysis needs internet. Manual logging still works.
             </div>
           )}
 
           {error && (
-            <div className="animate-rise rounded-2xl border border-danger/40 bg-surface p-4">
+            <div className="animate-rise border-[1.5px] border-danger bg-surface p-4">
               <p className="text-sm leading-relaxed text-ink">{error.message}</p>
               {mode !== 'manual' && (
                 <div className="mt-3 flex gap-2">
@@ -339,7 +335,7 @@ export function Log() {
                     <button
                       type="button"
                       onClick={runAnalysis}
-                      className="h-11 flex-1 rounded-xl bg-accent-dim text-sm font-semibold text-accent-bright active:scale-[0.98]"
+                      className="label-caps h-11 flex-1 border-[1.5px] border-edge bg-accent text-[11px] text-surface active:translate-y-px"
                     >
                       Retry
                     </button>
@@ -347,7 +343,7 @@ export function Log() {
                   <button
                     type="button"
                     onClick={enterManually}
-                    className="h-11 flex-1 rounded-xl bg-surface-2 text-sm font-medium text-ink active:scale-[0.98]"
+                    className="label-caps h-11 flex-1 border-[1.5px] border-edge text-[11px] text-ink active:translate-y-px"
                   >
                     Enter manually
                   </button>
@@ -363,13 +359,13 @@ export function Log() {
                   <img
                     src={photo.dataUrl}
                     alt="Meal preview"
-                    className="w-full rounded-2xl border border-edge"
+                    className="w-full border-[1.5px] border-edge"
                   />
                   <button
                     type="button"
                     aria-label="Discard photo"
                     onClick={() => setPhoto(null)}
-                    className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full bg-bg/70 text-ink backdrop-blur active:scale-[0.98]"
+                    className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center border-[1.5px] border-edge bg-surface text-ink active:translate-y-px"
                   >
                     <svg
                       className="h-5 w-5"
@@ -390,25 +386,12 @@ export function Log() {
                     type="button"
                     onClick={() => cameraRef.current?.click()}
                     disabled={compressing}
-                    className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-edge bg-surface active:scale-[0.98] disabled:opacity-60"
+                    className="paper-stripes flex aspect-[4/3] w-full flex-col items-center justify-center gap-2.5 border-[1.5px] border-dashed border-edge active:translate-y-px disabled:opacity-60"
                   >
-                    <svg
-                      className="h-8 w-8 text-ink-dim"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                      <circle cx="12" cy="13" r="4" />
-                    </svg>
-                    <span className="text-sm font-medium text-ink">
+                    <span className="serif text-[24px] text-ink">
                       {compressing ? 'Processing photo…' : 'Take a photo'}
                     </span>
-                    <span className="px-6 text-center text-xs text-ink-dim">
+                    <span className="px-10 text-center text-[11.5px] text-ink-faint">
                       Tip: put your hand next to the plate for scale.
                     </span>
                   </button>
@@ -416,7 +399,7 @@ export function Log() {
                     type="button"
                     onClick={() => libraryRef.current?.click()}
                     disabled={compressing}
-                    className="h-11 w-full rounded-xl bg-surface text-sm font-medium text-ink-dim active:scale-[0.98] disabled:opacity-60"
+                    className="label-caps h-11 w-full border-[1.5px] border-edge text-[11px] text-ink active:translate-y-px disabled:opacity-60"
                   >
                     Choose from library
                   </button>
@@ -429,7 +412,7 @@ export function Log() {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Anything the AI should know? e.g. “the glass is protein shake”"
-                  className="h-12 w-full rounded-xl border border-edge bg-surface px-3 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+                  className="h-12 w-full border-[1.5px] border-edge bg-bg px-3 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent"
                 />
               )}
 
@@ -460,7 +443,7 @@ export function Log() {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
                 placeholder="3-egg omelette with cheese and oil…"
-                className="w-full resize-none rounded-2xl border border-edge bg-surface p-4 text-sm leading-relaxed text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+                className="w-full resize-none border-[1.5px] border-edge bg-bg p-4 text-sm leading-relaxed text-ink outline-none placeholder:text-ink-faint focus:border-accent"
               />
               {hasKey ? analyzeButton(!description.trim()) : apiKeyCard}
             </div>
@@ -475,7 +458,7 @@ export function Log() {
                   value={mName}
                   onChange={(e) => setMName(e.target.value)}
                   placeholder="Chicken & rice bowl"
-                  className="h-12 w-full rounded-xl border border-edge bg-surface px-3 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+                  className="h-12 w-full border-[1.5px] border-edge bg-bg px-3 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent"
                 />
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -488,7 +471,7 @@ export function Log() {
                     value={mProtein}
                     onChange={(e) => setMProtein(e.target.value)}
                     placeholder="0"
-                    className="num h-12 w-full rounded-xl border border-edge bg-surface px-3 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+                    className="num h-12 w-full border-[1.5px] border-edge bg-bg px-3 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent"
                   />
                 </label>
                 <label className="block">
@@ -500,7 +483,7 @@ export function Log() {
                     value={mCalories}
                     onChange={(e) => setMCalories(e.target.value)}
                     placeholder="0"
-                    className="num h-12 w-full rounded-xl border border-edge bg-surface px-3 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+                    className="num h-12 w-full border-[1.5px] border-edge bg-bg px-3 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent"
                   />
                 </label>
               </div>
@@ -508,7 +491,7 @@ export function Log() {
                 type="button"
                 onClick={saveManual}
                 disabled={!mName.trim() || saving}
-                className="h-12 w-full rounded-xl bg-accent font-semibold text-bg active:scale-[0.98] disabled:opacity-40"
+                className="label-caps h-[52px] w-full border-[1.5px] border-edge bg-accent text-[14px] tracking-[0.06em] text-surface shadow-offset-4 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none disabled:opacity-40"
               >
                 {saving ? 'Saving…' : 'Save meal'}
               </button>

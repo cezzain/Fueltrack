@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
+    "@fontsource/instrument-serif": "^5.2.8",
+    "@fontsource/space-grotesk": "^5.2.10",
     "idb": "^8.0.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

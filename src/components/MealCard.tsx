@@ -12,125 +12,112 @@ interface MealCardProps {
   defaultExpanded?: boolean;
 }
 
-/** A logged meal: name, time, macros, AI badge, expandable item breakdown. */
+/**
+ * Editorial meal row: hairline-divided list entry with a time column, serif
+ * meal name, uppercase micro-meta, and orange protein figure. Expands to the
+ * item breakdown; the repeat square keeps re-logging one tap.
+ */
 export function MealCard({ meal, onRepeat, onDelete, defaultExpanded = false }: MealCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const photo = usePhoto(meal.photoId);
   const isAi = meal.source !== 'manual';
 
+  const meta = [
+    meal.mealType,
+    isAi ? (meal.edited ? 'AI · edited' : 'AI estimate') : 'manual',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
-    <div className="animate-rise rounded-2xl border border-edge bg-surface">
-      <div className="flex items-center gap-3 p-3 pr-3">
+    <div className="animate-rise border-b border-hairline">
+      <div className="flex items-baseline gap-3 py-4">
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          className="flex min-w-0 flex-1 items-baseline gap-3 text-left"
           onClick={() => setExpanded((e) => !e)}
           aria-expanded={expanded}
         >
-        {photo ? (
-          <img
-            src={photo}
-            alt=""
-            className="h-12 w-12 shrink-0 rounded-xl border border-edge object-cover"
-          />
-        ) : (
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-lg">
-            🍽
+          <span className="num w-10 shrink-0 text-[11px] text-ink-faint">
+            {formatTime(meal.loggedAt)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="serif truncate text-[19px] leading-tight text-ink">{meal.name}</div>
+            <div className="label-caps mt-1 text-[10px] font-semibold tracking-[0.08em] text-ink-faint">
+              {meta}
+            </div>
           </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[15px] font-medium text-ink">{meal.name}</div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim">
-            <span className="num">{formatTime(meal.loggedAt)}</span>
-            {meal.mealType && (
-              <span className="whitespace-nowrap rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium capitalize text-ink-dim">
-                {meal.mealType}
-              </span>
-            )}
-            {isAi && !meal.edited && (
-              <span className="whitespace-nowrap rounded-md bg-accent-dim px-1.5 py-0.5 text-[10px] font-medium text-accent-bright">
-                AI estimate
-              </span>
-            )}
-            {isAi && meal.edited && (
-              <span className="whitespace-nowrap rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-ink-dim">
-                AI · edited
-              </span>
-            )}
+          <div className="shrink-0 text-right">
+            <div className="num text-[16px] font-bold text-accent">{meal.protein_g}g</div>
+            <div className="num text-[11px] text-ink-faint">{meal.calories} kcal</div>
           </div>
-        </div>
-        <div className="shrink-0 text-right">
-          <div className="num text-[15px] font-semibold text-accent-bright">{meal.protein_g}g</div>
-          <div className="num text-xs text-ink-dim">{meal.calories} kcal</div>
-        </div>
         </button>
         {onRepeat && (
-          // Spec: re-log any previous meal in ONE tap — no expand needed.
           <button
             type="button"
             aria-label={`Log ${meal.name} again`}
             onClick={() => onRepeat(meal)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-accent-bright active:scale-[0.95]"
+            className="flex h-10 w-10 shrink-0 translate-y-1 items-center justify-center self-center border-[1.5px] border-edge text-accent active:translate-x-0.5 active:translate-y-1.5"
           >
-            <RepeatIcon />
+            <RepeatIcon size={15} />
           </button>
         )}
       </div>
 
       {expanded && (
-        <div className="border-t border-edge px-3 pb-3">
+        <div className="pb-4 pl-13">
+          {photo && (
+            <img
+              src={photo}
+              alt=""
+              className="mb-3 h-24 w-24 border-[1.5px] border-edge object-cover"
+            />
+          )}
           {meal.items.length > 0 && (
-            <ul className="divide-y divide-edge/60">
+            <ul>
               {meal.items.map((item) => (
-                <li key={item.id} className="flex items-baseline gap-2 py-2 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <span className="text-ink">{item.name}</span>
-                    {item.portion && <span className="ml-1.5 text-xs text-ink-faint">{item.portion}</span>}
+                <li key={item.id} className="flex items-baseline gap-2 py-1 text-[12.5px]">
+                  <div className="min-w-0 flex-1 text-ink">
+                    {item.name}
+                    {item.portion && (
+                      <span className="serif ml-1.5 text-[11px] italic text-ink-faint">
+                        {item.portion}
+                      </span>
+                    )}
                   </div>
-                  <span className="num shrink-0 text-ink-dim">{item.protein_g}g</span>
-                  <span className="num w-16 shrink-0 text-right text-ink-faint">{item.calories} kcal</span>
+                  <span className="num shrink-0 font-semibold text-accent">{item.protein_g}g</span>
+                  <span className="num w-14 shrink-0 text-right text-ink-faint">
+                    {item.calories}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
           {meal.aiNotes && (
-            <p className="mt-1 rounded-lg bg-surface-2 p-2 text-xs leading-relaxed text-ink-dim">
+            <p className="serif mt-2 text-[13px] italic leading-relaxed text-ink-dim">
               {meal.aiNotes}
             </p>
           )}
-          {(onRepeat || onDelete) && (
-            <div className="mt-2 flex items-center gap-2">
-              {onRepeat && (
+          {onDelete && (
+            <div className="mt-3">
+              {confirmDelete ? (
                 <button
                   type="button"
-                  onClick={() => onRepeat(meal)}
-                  className="flex-1 rounded-xl bg-accent-dim px-3 py-2 text-sm font-medium text-accent-bright active:scale-[0.98]"
+                  onClick={() => onDelete(meal)}
+                  className="label-caps h-10 border-[1.5px] border-danger px-4 text-[10px] text-danger active:translate-y-px"
                 >
-                  <span className="mr-1.5 inline-block align-[-2px]">
-                    <RepeatIcon size={14} />
-                  </span>
-                  Log again
+                  Confirm delete
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  className="label-caps h-10 border border-hairline px-4 text-[10px] text-ink-faint active:translate-y-px"
+                >
+                  Delete
                 </button>
               )}
-              {onDelete &&
-                (confirmDelete ? (
-                  <button
-                    type="button"
-                    onClick={() => onDelete(meal)}
-                    className="rounded-xl bg-danger/20 px-3 py-2 text-sm font-medium text-danger active:scale-[0.98]"
-                  >
-                    Confirm delete
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(true)}
-                    className="rounded-xl bg-surface-2 px-3 py-2 text-sm text-ink-dim active:scale-[0.98]"
-                  >
-                    Delete
-                  </button>
-                ))}
             </div>
           )}
         </div>

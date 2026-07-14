@@ -3,49 +3,14 @@ import type { DaySummary, Meal } from '../types';
 import { useApp, useDaySummaries } from '../state/AppContext';
 import { formatRelativeDayLabel, lastNDateKeys } from '../lib/dates';
 import { MealCard } from '../components/MealCard';
-import { MoonIcon } from '../components/icons';
-
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
-function Header() {
-  return (
-    <header>
-      <h1 className="text-xl font-semibold text-ink">History</h1>
-      <p className="mt-0.5 text-sm text-ink-dim">Last 30 days</p>
-    </header>
-  );
-}
 
 function HistorySkeleton() {
   return (
-    <div>
-      <Header />
-      <div className="mt-5 h-28 animate-pulse rounded-2xl bg-surface" />
-      <div className="mt-6 animate-pulse">
-        <div className="h-4 w-16 rounded-md bg-surface" />
-        <div className="mt-3 flex flex-col gap-3">
-          <div className="h-[76px] rounded-2xl bg-surface" />
-          <div className="h-[76px] rounded-2xl bg-surface" />
-          <div className="h-[76px] rounded-2xl bg-surface" />
-        </div>
-      </div>
+    <div className="animate-pulse">
+      <div className="mt-5 h-12 w-44 bg-surface-2" />
+      <div className="mt-5 h-24 w-full bg-surface-2" />
+      <div className="mt-6 h-16 w-full bg-surface-2" />
+      <div className="mt-3 h-16 w-full bg-surface-2" />
     </div>
   );
 }
@@ -59,65 +24,26 @@ function WeeklyAverages({ days, proteinTarget }: { days: DaySummary[]; proteinTa
   const avgCalories = n > 0 ? Math.round(logged.reduce((sum, d) => sum + d.calories, 0) / n) : null;
   const onTarget = logged.filter((d) => d.protein_g >= proteinTarget).length;
 
+  const cell = (value: string, label: string, accent = false, last = false) => (
+    <div className={`flex-1 p-3.5 ${last ? '' : 'border-r border-edge'}`}>
+      <div className={`serif num text-[26px] ${accent ? 'text-accent' : 'text-ink'}`}>{value}</div>
+      <div className="label-caps mt-0.5 text-[10px] tracking-[0.08em] text-ink-faint">{label}</div>
+    </div>
+  );
+
   return (
-    <section className="rounded-2xl border border-edge bg-surface p-4">
-      <h2 className="text-sm text-ink-dim">Last 7 days</h2>
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <div className="flex-1">
-          <div className="num text-2xl font-semibold text-accent-bright">
-            {avgProtein !== null ? (
-              <>
-                {avgProtein}
-                <span className="ml-0.5 text-sm font-medium">g/day</span>
-              </>
-            ) : (
-              '—'
-            )}
-          </div>
-          <div className="mt-0.5 text-xs text-ink-faint">avg protein</div>
-        </div>
-        <div className="flex-1">
-          <div className="num text-2xl font-semibold text-ink">
-            {avgCalories !== null ? avgCalories : '—'}
-          </div>
-          <div className="mt-0.5 text-xs text-ink-faint">avg kcal</div>
-        </div>
-        <div className="flex-1">
-          <div className="num text-2xl font-semibold text-ink">
-            {n > 0 ? `${onTarget}/${n}` : '—'}
-          </div>
-          <div className="mt-0.5 text-xs text-ink-faint">target hit</div>
-        </div>
-      </div>
-      <p className="mt-3 text-[11px] text-ink-faint">
-        {n > 0 ? (
-          <>
-            of <span className="num">{n}</span> logged day{n === 1 ? '' : 's'}
-          </>
-        ) : (
-          'No meals logged in the last 7 days yet.'
-        )}
-      </p>
+    <section className="flex border-[1.5px] border-edge bg-surface" aria-label="Last 7 days">
+      {cell(avgProtein !== null ? `${avgProtein}g` : '—', 'avg protein', true)}
+      {cell(avgCalories !== null ? String(avgCalories) : '—', 'avg kcal')}
+      {cell(n > 0 ? `${onTarget}/${n}` : '—', 'target hit', false, true)}
     </section>
   );
 }
 
-function TargetBar({ value, target, tone }: { value: number; target: number; tone: 'accent' | 'cal' }) {
-  const pct = target > 0 ? Math.min(100, (value / target) * 100) : 0;
-  return (
-    <div className="h-1 overflow-hidden rounded-full bg-surface-2">
-      <div
-        className={`h-full rounded-full ${tone === 'accent' ? 'bg-accent' : 'bg-cal'}`}
-        style={{ width: `${pct}%` }}
-      />
-    </div>
-  );
-}
-
 /**
- * Day status vs the calorie target: green once the target is hit; red for a
- * PAST day that missed it (today is still in progress and light days are
- * exempt — no failure states there).
+ * Day status vs the calorie target: hit once the target is reached; missed
+ * for a PAST day that fell short (today is still in progress and light days
+ * are exempt — no failure states there).
  */
 function dayStatus(
   day: DaySummary,
@@ -133,88 +59,67 @@ function DayRow({
   day,
   isToday,
   proteinTarget,
-  calorieTarget,
   onRepeat,
 }: {
   day: DaySummary;
   isToday: boolean;
   proteinTarget: number;
-  calorieTarget: number;
   onRepeat: (meal: Meal) => void;
 }) {
+  const { settings } = useApp();
   const [expanded, setExpanded] = useState(isToday);
-  const status = dayStatus(day, isToday, calorieTarget);
+  const status = dayStatus(day, isToday, settings.calorieTarget_kcal);
+  const proteinPct = proteinTarget > 0 ? Math.min(100, (day.protein_g / proteinTarget) * 100) : 0;
 
   return (
-    <div
-      className={`animate-rise rounded-2xl border bg-surface ${
-        status === 'hit'
-          ? 'border-accent/40'
-          : status === 'missed'
-            ? 'border-danger/40'
-            : 'border-edge'
-      }`}
-    >
+    <div className="animate-rise border-b border-hairline">
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
         aria-expanded={expanded}
-        className="flex min-h-11 w-full items-center gap-3 p-4 text-left"
+        className="flex w-full items-baseline gap-3 py-4 text-left"
       >
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-[15px] font-medium text-ink">
-              {formatRelativeDayLabel(day.dateKey)}
-            </span>
+          <div className="flex items-baseline gap-2.5">
+            <span className="serif text-[21px] text-ink">{formatRelativeDayLabel(day.dateKey)}</span>
             {day.lightDay && (
-              <span className="flex shrink-0 items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-ink-dim">
-                <MoonIcon size={12} />
-                light
+              <span className="label-caps shrink-0 text-[10px] font-semibold tracking-[0.08em] text-ink-faint">
+                ☾ light
               </span>
             )}
             {status === 'hit' && (
-              <span className="shrink-0 rounded-md bg-accent-dim px-1.5 py-0.5 text-[10px] font-medium text-accent-bright">
-                target hit
+              <span className="label-caps shrink-0 text-[10px] tracking-[0.08em] text-accent">
+                ● target hit
               </span>
             )}
             {status === 'missed' && (
-              <span className="shrink-0 rounded-md bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">
+              <span className="label-caps shrink-0 text-[10px] tracking-[0.08em] text-danger">
                 under target
               </span>
             )}
           </div>
-          <div className="mt-2.5 flex flex-col gap-1.5 pr-2">
-            <TargetBar value={day.protein_g} target={proteinTarget} tone="accent" />
-            <TargetBar value={day.calories} target={calorieTarget} tone="cal" />
+          <div className="mt-2 h-2 max-w-[200px] border border-edge" style={{ padding: 1.5 }}>
+            <div className="h-full bg-accent" style={{ width: `${proteinPct}%` }} />
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <div className="num text-[15px] font-semibold text-accent-bright">
-            {Math.round(day.protein_g)}g
-          </div>
+          <div className="num text-[16px] font-bold text-accent">{Math.round(day.protein_g)}g</div>
           <div
-            className={`num text-xs ${
-              status === 'hit' ? 'text-accent-bright' : status === 'missed' ? 'text-danger' : 'text-ink-dim'
+            className={`num text-[11px] ${
+              status === 'hit' ? 'text-accent' : status === 'missed' ? 'text-danger' : 'text-ink-faint'
             }`}
           >
             {Math.round(day.calories)} kcal
           </div>
         </div>
-        <span className="shrink-0 text-ink-faint">
-          <ChevronIcon open={expanded} />
-        </span>
       </button>
 
       {expanded && (
-        <div className="border-t border-edge p-3">
+        <div className="pb-3 pl-2">
           {day.meals.length === 0 ? (
-            <p className="py-2 text-center text-sm text-ink-dim">Nothing logged yet today.</p>
+            <p className="serif pb-2 text-[14px] italic text-ink-faint">Nothing logged yet today.</p>
           ) : (
-            <div className="flex flex-col gap-3">
-              {day.meals.map((meal) => (
-                <MealCard key={meal.id} meal={meal} onRepeat={onRepeat} />
-              ))}
-            </div>
+            day.meals.map((meal) => <MealCard key={meal.id} meal={meal} onRepeat={onRepeat} />)
           )}
         </div>
       )}
@@ -232,41 +137,35 @@ export function History() {
 
   if (!days) return <HistorySkeleton />;
 
-  const visible = [...days]
-    .reverse()
-    .filter((d) => d.mealCount > 0 || d.dateKey === todayKey);
+  const visible = [...days].reverse().filter((d) => d.mealCount > 0 || d.dateKey === todayKey);
 
   return (
     <div>
-      <Header />
+      <header className="mt-5">
+        <h1 className="serif text-[40px] leading-none text-ink">History</h1>
+        <p className="mt-2 text-[13px] text-ink-faint">Last 30 days</p>
+      </header>
 
-      <div className="mt-5">
+      <div className="mt-4">
         <WeeklyAverages days={days} proteinTarget={settings.proteinTarget_g} />
       </div>
 
-      <section className="mt-6">
-        <h2 className="text-sm uppercase tracking-wide text-ink-dim">Days</h2>
-        <div className="mt-3 flex flex-col gap-3">
-          {visible.length === 0 ? (
-            <div className="rounded-2xl border border-edge bg-surface p-6 text-center">
-              <p className="text-sm text-ink-dim">No days logged yet.</p>
-              <p className="mt-1 text-xs text-ink-faint">
-                Meals you log will show up here, day by day.
-              </p>
-            </div>
-          ) : (
-            visible.map((day) => (
-              <DayRow
-                key={day.dateKey}
-                day={day}
-                isToday={day.dateKey === todayKey}
-                proteinTarget={settings.proteinTarget_g}
-                calorieTarget={settings.calorieTarget_kcal}
-                onRepeat={repeatMeal}
-              />
-            ))
-          )}
-        </div>
+      <section className="mt-5">
+        {visible.length === 0 ? (
+          <p className="serif mt-4 text-[16px] italic text-ink-faint">
+            No days logged yet — meals you log will show up here, day by day.
+          </p>
+        ) : (
+          visible.map((day) => (
+            <DayRow
+              key={day.dateKey}
+              day={day}
+              isToday={day.dateKey === todayKey}
+              proteinTarget={settings.proteinTarget_g}
+              onRepeat={repeatMeal}
+            />
+          ))
+        )}
       </section>
     </div>
   );

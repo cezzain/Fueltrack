@@ -10,16 +10,17 @@ interface ConfirmationCardProps {
   saving?: boolean;
 }
 
-const CONFIDENCE_STYLES: Record<Confidence, string> = {
-  low: 'text-warn bg-warn/10',
-  medium: 'text-ink-dim bg-surface-2',
-  high: 'text-accent-bright bg-accent-dim',
+const CONFIDENCE_COLOR: Record<Confidence, string> = {
+  low: 'text-warn',
+  medium: 'text-ink-faint',
+  high: 'text-accent',
 };
 
 /**
- * Editable post-analysis review card. The original analysis is kept as an
- * immutable baseline: the portion slider always multiplies baseline values
- * (so 1× restores originals), while direct edits pin an item's field.
+ * Editable post-analysis review card, Editorial Type style. The original
+ * analysis is kept as an immutable baseline: the portion slider always
+ * multiplies baseline values (so 1× restores originals), while direct edits
+ * pin an item's field.
  */
 export function ConfirmationCard({
   analysis,
@@ -84,14 +85,14 @@ export function ConfirmationCard({
   };
 
   return (
-    <div className="animate-rise space-y-4 rounded-2xl border border-edge bg-surface p-4">
-      {/* Header: photo thumbnail + editable meal name */}
+    <div className="animate-rise flex flex-col gap-4 border-[1.5px] border-edge bg-surface p-5 shadow-offset-6">
+      {/* Header: photo thumbnail + editable serif meal name */}
       <div className="flex items-center gap-3">
         {photoDataUrl && (
           <img
             src={photoDataUrl}
             alt=""
-            className="h-14 w-14 shrink-0 rounded-xl border border-edge object-cover"
+            className="h-14 w-14 shrink-0 border-[1.5px] border-edge object-cover"
           />
         )}
         <input
@@ -100,17 +101,17 @@ export function ConfirmationCard({
           onChange={(e) => setName(e.target.value)}
           placeholder="Meal name"
           aria-label="Meal name"
-          className="min-w-0 flex-1 border-b border-edge bg-transparent pb-1.5 text-lg font-semibold text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+          className="serif min-w-0 flex-1 border-b-[1.5px] border-edge bg-transparent pb-1.5 text-[22px] text-ink outline-none placeholder:text-ink-faint focus:border-accent"
         />
       </div>
 
       {/* Portion slider — scales everything from the original baseline */}
       <div>
         <div className="flex items-baseline justify-between">
-          <label htmlFor="portion-slider" className="text-sm text-ink-dim">
-            Portion size
+          <label htmlFor="portion-slider" className="label-caps text-[12px] font-semibold tracking-[0.08em] text-ink">
+            Portion
           </label>
-          <span className="num text-sm font-semibold text-ink">{mult.toFixed(2)}×</span>
+          <span className="num text-[13px] font-bold text-ink">{mult.toFixed(2)}×</span>
         </div>
         <input
           id="portion-slider"
@@ -135,20 +136,22 @@ export function ConfirmationCard({
           <span className="w-16 text-right">protein g</span>
           <span className="w-16 text-right">kcal</span>
         </div>
-        <ul className="divide-y divide-edge/60">
+        <ul>
           {baseline.items.map((it, i) => (
-            <li key={i} className="flex items-center gap-2 py-2">
+            <li key={i} className="flex items-center gap-2 border-b border-hairline py-2">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate text-sm text-ink">{it.name}</span>
+                <div className="flex items-baseline gap-1.5 text-[13px] text-ink">
+                  <span className="truncate">{it.name}</span>
                   <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${CONFIDENCE_STYLES[it.confidence]}`}
+                    className={`label-caps shrink-0 text-[9px] tracking-[0.08em] ${CONFIDENCE_COLOR[it.confidence]}`}
                   >
                     {it.confidence}
                   </span>
                 </div>
                 {it.portion_estimate && (
-                  <div className="mt-0.5 truncate text-xs text-ink-faint">{it.portion_estimate}</div>
+                  <div className="serif mt-0.5 truncate text-[11px] italic text-ink-faint">
+                    {it.portion_estimate}
+                  </div>
                 )}
               </div>
               <input
@@ -158,7 +161,7 @@ export function ConfirmationCard({
                 value={displayFor(i, 'p', it.protein_g)}
                 onChange={(e) => setOverride(i, 'p', e.target.value)}
                 aria-label={`${it.name} protein grams`}
-                className="num w-16 shrink-0 rounded-lg bg-surface-2 px-2 py-2 text-right text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                className="num w-16 shrink-0 border border-edge bg-bg px-2 py-2 text-right text-sm text-ink outline-none focus:border-accent"
               />
               <input
                 type="number"
@@ -167,7 +170,7 @@ export function ConfirmationCard({
                 value={displayFor(i, 'c', it.calories)}
                 onChange={(e) => setOverride(i, 'c', e.target.value)}
                 aria-label={`${it.name} calories`}
-                className="num w-16 shrink-0 rounded-lg bg-surface-2 px-2 py-2 text-right text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                className="num w-16 shrink-0 border border-edge bg-bg px-2 py-2 text-right text-sm text-ink outline-none focus:border-accent"
               />
             </li>
           ))}
@@ -175,29 +178,18 @@ export function ConfirmationCard({
       </div>
 
       {/* Totals — recomputed live from item values */}
-      <div className="flex items-end justify-between border-t border-edge pt-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-wider text-ink-faint">Protein</div>
-          <div className="num text-2xl font-bold text-accent-bright">
-            {totalProtein}
-            <span className="text-sm font-semibold">g</span>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-[10px] uppercase tracking-wider text-ink-faint">Calories</div>
-          <div className="num text-2xl font-bold text-ink">
-            {totalCalories}
-            <span className="text-sm font-semibold text-ink-dim"> kcal</span>
-          </div>
+      <div className="flex items-baseline justify-between border-t-[1.5px] border-edge pt-3">
+        <div className="serif num text-[34px] text-accent">{totalProtein}g</div>
+        <div className="serif num text-[34px] text-ink">
+          {totalCalories} <span className="text-[16px]">kcal</span>
         </div>
       </div>
 
       {/* AI assumptions */}
       {baseline.notes && (
-        <div className="rounded-lg bg-surface-2 p-2 text-xs leading-relaxed text-ink-dim">
-          <span className="font-semibold">AI assumptions: </span>
+        <p className="serif border-l-4 border-accent pl-3 text-[13px] italic leading-relaxed text-ink-dim">
           {baseline.notes}
-        </div>
+        </p>
       )}
 
       {/* Actions */}
@@ -206,26 +198,15 @@ export function ConfirmationCard({
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-accent font-semibold text-bg active:scale-[0.98] disabled:opacity-60"
+          className="label-caps h-[50px] flex-1 border-[1.5px] border-edge bg-ink text-[13px] tracking-[0.06em] text-surface active:translate-y-px disabled:opacity-60"
         >
-          {saving && (
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
-              <path
-                d="M12 2a10 10 0 0 1 10 10"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-            </svg>
-          )}
           {saving ? 'Logging…' : 'Log it'}
         </button>
         <button
           type="button"
           onClick={onDiscard}
           disabled={saving}
-          className="h-12 rounded-xl px-4 text-sm font-medium text-ink-dim active:scale-[0.98] disabled:opacity-60"
+          className="h-[50px] border-[1.5px] border-edge px-4 text-[12px] font-semibold text-ink active:translate-y-px disabled:opacity-60"
         >
           Discard
         </button>

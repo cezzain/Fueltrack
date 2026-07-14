@@ -5,6 +5,17 @@ import { Log } from './screens/Log';
 import { History } from './screens/History';
 import { Insights } from './screens/Insights';
 import { Settings } from './screens/Settings';
+import { formatDayLabel } from './lib/dates';
+
+function Masthead() {
+  const { todayKey } = useApp();
+  return (
+    <header className="flex items-center justify-between border-b-[1.5px] border-edge pb-3">
+      <span className="label-caps text-[12px] tracking-[0.14em] text-ink">FuelTrack</span>
+      <span className="text-[11px] text-ink-faint">{formatDayLabel(todayKey)}</span>
+    </header>
+  );
+}
 
 function Screens() {
   const { ready, tab } = useApp();
@@ -12,9 +23,7 @@ function Screens() {
   if (!ready) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
-        <div className="animate-pulse text-sm font-medium tracking-widest text-ink-faint">
-          FUELTRACK
-        </div>
+        <div className="label-caps animate-pulse text-sm text-ink-faint">FuelTrack</div>
       </div>
     );
   }
@@ -24,7 +33,8 @@ function Screens() {
   // unsaved review card on the Log screen survives a detour to Settings.
   return (
     <div className="mx-auto min-h-dvh max-w-md safe-top">
-      <main className="px-4 pb-28 pt-4">
+      <main className="px-5 pb-28 pt-5">
+        <Masthead />
         <div hidden={tab !== 'today'}>
           <Today />
         </div>

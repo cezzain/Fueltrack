@@ -6,20 +6,18 @@ interface ProgressRingProps {
   label: string;
   unit: string;
   tone: 'accent' | 'cal';
-  /** Outer diameter in px. */
-  size?: number;
-  /** Softens the ring (no glow, slightly translucent arc) on relaxed days. */
+  /** 'hero' = the giant serif protein figure; 'md' = the smaller calories figure. */
+  variant?: 'hero' | 'md';
+  /** Softens the remaining-text tone on relaxed days (bar renders the same). */
   lightDay?: boolean;
 }
 
-const STROKE = 10;
 const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
 /**
- * Animated SVG progress ring. The arc draws from 0 to the current fraction on
- * mount (via a post-paint state flip) and transitions smoothly on every value
- * change. Visual arc is capped at 100%; beyond target it switches to the
- * bright tone variant so hitting the target reads as a win.
+ * Editorial stat block (Editorial Type design): a huge Instrument Serif
+ * number, an uppercase label line, and an ink-bordered horizontal bar whose
+ * fill animates in from 0. Replaces the old ring — same props contract.
  */
 export function ProgressRing({
   value,
@@ -27,19 +25,12 @@ export function ProgressRing({
   label,
   unit,
   tone,
-  size = 150,
+  variant = 'hero',
   lightDay = false,
 }: ProgressRingProps) {
-  const radius = (size - STROKE) / 2;
-  const center = size / 2;
-  const circumference = 2 * Math.PI * radius;
-
   const fraction = target > 0 ? Math.min(Math.max(value / target, 0), 1) : 0;
-  const over = target > 0 && value > target;
 
-  // Start drawn at 0 so the first paint shows an empty ring, then flip to the
-  // real fraction after paint — the CSS transition animates the fill. Later
-  // value changes re-run the effect and transition from the previous arc.
+  // First paint shows an empty bar; the post-paint flip animates the fill.
   const [drawn, setDrawn] = useState(0);
   useEffect(() => {
     let raf2 = 0;
@@ -52,66 +43,44 @@ export function ProgressRing({
     };
   }, [fraction]);
 
-  const arcColor = over
-    ? tone === 'accent'
-      ? 'var(--color-accent-bright)'
-      : 'var(--color-cal-bright)'
-    : tone === 'accent'
-      ? 'var(--color-accent)'
-      : 'var(--color-cal)';
-
-  // Only the loud color gets a glow, and never on a light day.
-  const glow =
-    tone === 'accent' && !lightDay ? 'drop-shadow(0 0 6px var(--color-accent-dim))' : undefined;
+  const hero = variant === 'hero';
+  const fill = tone === 'accent' ? 'var(--color-accent)' : 'var(--color-ink)';
 
   return (
     <div
-      className="animate-ring-pop relative"
-      style={{ width: size, height: size }}
+      className="animate-rise"
       role="img"
       aria-label={`${label}: ${Math.round(value)} of ${target} ${unit}`}
     >
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <g transform={`rotate(-90 ${center} ${center})`}>
-          <circle
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="none"
-            stroke="var(--color-edge)"
-            strokeWidth={STROKE}
-          />
-          <circle
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="none"
-            stroke={arcColor}
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - drawn)}
-            style={{
-              transition: `stroke-dashoffset 0.9s ${EASE}, stroke 0.4s ease`,
-              filter: glow,
-              opacity: lightDay ? 0.75 : 1,
-            }}
-          />
-        </g>
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className={`num font-bold text-ink ${size >= 140 ? 'text-3xl' : 'text-2xl'}`}>
-          {Math.round(value)}
-        </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-dim">
-          <span
-            aria-hidden="true"
-            className={`h-1.5 w-1.5 rounded-full ${tone === 'accent' ? 'bg-accent' : 'bg-cal'}`}
-          />
-          <span>
-            {unit} · {label}
-          </span>
-        </div>
+      <div
+        className={`serif ${hero ? 'text-[76px] leading-[0.9]' : 'text-[42px] leading-[0.95] text-ink-mid'}`}
+        style={{ letterSpacing: hero ? '-0.03em' : '-0.02em' }}
+      >
+        <span className="num">{Math.round(value)}</span>
+        <span className={hero ? 'text-[32px]' : 'text-[20px]'}>
+          {unit === 'kcal' ? ' kcal' : unit}
+        </span>
+      </div>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className="label-caps text-[12px] tracking-[0.1em] text-ink">{label}</span>
+        <span className={`text-[13px] ${lightDay ? 'text-ink-faint' : 'text-ink-dim'}`}>
+          of <span className="num">{target.toLocaleString('en-US')}</span>
+          {unit === 'kcal' ? ' kcal' : unit}
+        </span>
+      </div>
+      <div
+        className={`mt-3 border-[1.5px] border-edge ${hero ? 'h-3.5' : 'h-2.5'}`}
+        style={{ padding: 2 }}
+      >
+        <div
+          className="h-full"
+          style={{
+            background: fill,
+            width: `${drawn * 100}%`,
+            transition: `width 0.9s ${EASE}`,
+            opacity: lightDay ? 0.8 : 1,
+          }}
+        />
       </div>
     </div>
   );
