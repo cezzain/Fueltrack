@@ -19,14 +19,27 @@ function Screens() {
     );
   }
 
+  // All screens stay mounted (hidden with CSS) so switching tabs never
+  // discards in-flight state — a taken photo, a running analysis, or an
+  // unsaved review card on the Log screen survives a detour to Settings.
   return (
     <div className="mx-auto min-h-dvh max-w-md safe-top">
       <main className="px-4 pb-28 pt-4">
-        {tab === 'today' && <Today />}
-        {tab === 'log' && <Log />}
-        {tab === 'history' && <History />}
-        {tab === 'insights' && <Insights />}
-        {tab === 'settings' && <Settings />}
+        <div hidden={tab !== 'today'}>
+          <Today />
+        </div>
+        <div hidden={tab !== 'log'}>
+          <Log />
+        </div>
+        <div hidden={tab !== 'history'}>
+          <History />
+        </div>
+        <div hidden={tab !== 'insights'}>
+          <Insights />
+        </div>
+        <div hidden={tab !== 'settings'}>
+          <Settings />
+        </div>
       </main>
       <TabBar />
     </div>

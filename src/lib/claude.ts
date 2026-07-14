@@ -49,7 +49,7 @@ function toFriendlyError(err: unknown): ClaudeError {
   return new ClaudeError('Unexpected error while analyzing — you can retry or log manually.', true);
 }
 
-const ANALYSIS_SYSTEM = `You are a nutrition analyst inside FuelTrack, a personal calorie & protein tracker.
+export const ANALYSIS_SYSTEM = `You are a nutrition analyst inside FuelTrack, a personal calorie & protein tracker.
 
 When given a meal (photo and/or text description):
 - Identify EVERY food item on the plate or in the description.
@@ -100,7 +100,7 @@ export function parseAnalysis(raw: string): AnalysisResult {
   };
 }
 
-function extractJson(raw: string): unknown {
+export function extractJson(raw: string): unknown {
   let text = raw.trim();
   // Strip ```json ... ``` fences if the model added them anyway.
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -189,7 +189,7 @@ export async function analyzeMealText(apiKey: string, description: string): Prom
   ]);
 }
 
-const INSIGHTS_SYSTEM = `You are the weekly coach inside FuelTrack, a calorie & protein tracker for an 18-year-old, 6'1", 61 kg basketball player (6 days/week) on a lean bulk.
+export const INSIGHTS_SYSTEM = `You are the weekly coach inside FuelTrack, a calorie & protein tracker for an 18-year-old, 6'1", 61 kg basketball player (6 days/week) on a lean bulk.
 
 You get the last 7 days of logged data plus daily targets. Days flagged "lightDay" were travel/sick days — treat lower intake there as expected, not failure. Days with zero meals were likely unlogged, not fasted; say so rather than treating them as zero intake.
 
@@ -239,7 +239,7 @@ export async function generateWeeklyInsights(
   }
 }
 
-function parseInsights(raw: string): WeeklyInsights {
+export function parseInsights(raw: string): WeeklyInsights {
   const parsed = extractJson(raw);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new ClaudeError('The AI insights response was not valid JSON — retry.', true);

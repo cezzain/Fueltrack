@@ -81,7 +81,17 @@ export function lastNDateKeys(n: number): string[] {
   return keys;
 }
 
-/** Compare date keys (ISO strings compare lexicographically). */
-export function isBeforeToday(dateKey: string): boolean {
-  return dateKey < todayKey();
+const hourFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: APP_TZ,
+  hour: 'numeric',
+  hour12: false,
+});
+
+/** Suggested meal type for right now, by Dubai wall-clock hour. */
+export function suggestedMealType(): 'breakfast' | 'lunch' | 'dinner' | 'snack' {
+  const hour = Number(hourFmt.format(new Date()));
+  if (hour >= 5 && hour < 11) return 'breakfast';
+  if (hour >= 11 && hour < 16) return 'lunch';
+  if (hour >= 17 && hour < 23) return 'dinner';
+  return 'snack';
 }

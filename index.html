@@ -2,9 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- maximum-scale=1 (not user-scalable=no, which iOS ignores) suppresses
+         Safari's auto-zoom on input focus in the standalone app. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover"
     />
     <title>FuelTrack</title>
     <meta name="description" content="AI-powered calorie & protein tracker" />

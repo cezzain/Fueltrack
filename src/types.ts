@@ -5,6 +5,10 @@ export type Confidence = 'low' | 'medium' | 'high';
 /** How a meal entered the log. AI sources get an "AI estimate" badge until edited. */
 export type MealSource = 'ai_photo' | 'ai_text' | 'manual';
 
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
 export interface FoodItem {
   id: string;
   name: string;
@@ -23,6 +27,8 @@ export interface Meal {
   name: string;
   /** Epoch ms when logged/eaten. */
   loggedAt: number;
+  /** Breakfast / lunch / dinner / snack. */
+  mealType?: MealType;
   items: FoodItem[];
   protein_g: number;
   calories: number;
@@ -82,8 +88,14 @@ export interface CachedInsights {
   insights: WeeklyInsights;
 }
 
+export type AiProvider = 'claude' | 'gemini';
+
 export interface Settings {
+  provider: AiProvider;
+  /** Anthropic API key (Claude provider). */
   apiKey: string;
+  /** Google AI Studio API key (Gemini provider). */
+  geminiApiKey: string;
   proteinTarget_g: number;
   calorieTarget_kcal: number;
   heightCm: number;
@@ -91,15 +103,31 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  provider: 'claude',
   apiKey: '',
+  geminiApiKey: '',
   proteinTarget_g: 110,
   calorieTarget_kcal: 3000,
   heightCm: 185, // 6'1"
   weightKg: 61,
 };
 
+/** The key for the currently selected AI provider. */
+export function activeApiKey(settings: Settings): string {
+  return (settings.provider === 'gemini' ? settings.geminiApiKey : settings.apiKey).trim();
+}
+
 export type Tab = 'today' | 'log' | 'history' | 'insights' | 'settings';
 
 export function newId(): string {
-  return crypto.randomUUID();
+  // crypto.randomUUID needs Safari 15.4+ and a secure context.
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

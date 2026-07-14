@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AnalysisResult, DaySummary, Meal, MealSource, Settings, Tab } from '../types';
+import type { AnalysisResult, DaySummary, Meal, MealSource, MealType, Settings, Tab } from '../types';
 import { newId } from '../types';
 import * as db from '../lib/db';
 import { todayKey as computeTodayKey } from '../lib/dates';
@@ -32,6 +32,7 @@ interface AppContextValue {
     analysis: AnalysisResult;
     source: MealSource;
     edited: boolean;
+    mealType?: MealType;
     photoDataUrl?: string;
   }) => Promise<Meal>;
   /** One-tap re-log: copy a previous meal onto today, timestamped now. */
@@ -92,6 +93,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       analysis: AnalysisResult;
       source: MealSource;
       edited: boolean;
+      mealType?: MealType;
       photoDataUrl?: string;
     }): Promise<Meal> => {
       let photoId: string | undefined;
@@ -104,6 +106,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dateKey: computeTodayKey(),
         name: input.name,
         loggedAt: Date.now(),
+        mealType: input.mealType,
         items: input.analysis.items.map((it) => ({
           id: newId(),
           name: it.name,
@@ -119,7 +122,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         aiNotes: input.analysis.notes || undefined,
       };
       if (photoId) meal.photoId = photoId;
-      await db.putMeal(meal);
+      try {
+        await db.putMeal(meal);
+      } catch (err) {
+        // Don't leave an unreachable photo behind if the meal write failed —
+        // a retry saves a fresh photo under a new id.
+        if (photoId) await db.deletePhoto(photoId).catch(() => {});
+        throw err;
+      }
       bump();
       return meal;
     },

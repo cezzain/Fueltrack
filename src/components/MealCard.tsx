@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Meal } from '../types';
 import { formatTime } from '../lib/dates';
 import { usePhoto } from '../state/AppContext';
+import { RepeatIcon } from './icons';
 
 interface MealCardProps {
   meal: Meal;
@@ -20,12 +21,13 @@ export function MealCard({ meal, onRepeat, onDelete, defaultExpanded = false }: 
 
   return (
     <div className="animate-rise rounded-2xl border border-edge bg-surface">
-      <button
-        type="button"
-        className="flex w-full items-center gap-3 p-3 text-left"
-        onClick={() => setExpanded((e) => !e)}
-        aria-expanded={expanded}
-      >
+      <div className="flex items-center gap-3 p-3 pr-3">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          onClick={() => setExpanded((e) => !e)}
+          aria-expanded={expanded}
+        >
         {photo ? (
           <img
             src={photo}
@@ -39,15 +41,20 @@ export function MealCard({ meal, onRepeat, onDelete, defaultExpanded = false }: 
         )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-medium text-ink">{meal.name}</div>
-          <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-dim">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim">
             <span className="num">{formatTime(meal.loggedAt)}</span>
+            {meal.mealType && (
+              <span className="whitespace-nowrap rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium capitalize text-ink-dim">
+                {meal.mealType}
+              </span>
+            )}
             {isAi && !meal.edited && (
-              <span className="rounded-md bg-accent-dim px-1.5 py-0.5 text-[10px] font-medium text-accent-bright">
+              <span className="whitespace-nowrap rounded-md bg-accent-dim px-1.5 py-0.5 text-[10px] font-medium text-accent-bright">
                 AI estimate
               </span>
             )}
             {isAi && meal.edited && (
-              <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-ink-dim">
+              <span className="whitespace-nowrap rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-ink-dim">
                 AI · edited
               </span>
             )}
@@ -57,7 +64,19 @@ export function MealCard({ meal, onRepeat, onDelete, defaultExpanded = false }: 
           <div className="num text-[15px] font-semibold text-accent-bright">{meal.protein_g}g</div>
           <div className="num text-xs text-ink-dim">{meal.calories} kcal</div>
         </div>
-      </button>
+        </button>
+        {onRepeat && (
+          // Spec: re-log any previous meal in ONE tap — no expand needed.
+          <button
+            type="button"
+            aria-label={`Log ${meal.name} again`}
+            onClick={() => onRepeat(meal)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-2 text-accent-bright active:scale-[0.95]"
+          >
+            <RepeatIcon />
+          </button>
+        )}
+      </div>
 
       {expanded && (
         <div className="border-t border-edge px-3 pb-3">
@@ -88,7 +107,10 @@ export function MealCard({ meal, onRepeat, onDelete, defaultExpanded = false }: 
                   onClick={() => onRepeat(meal)}
                   className="flex-1 rounded-xl bg-accent-dim px-3 py-2 text-sm font-medium text-accent-bright active:scale-[0.98]"
                 >
-                  ↺ Log again
+                  <span className="mr-1.5 inline-block align-[-2px]">
+                    <RepeatIcon size={14} />
+                  </span>
+                  Log again
                 </button>
               )}
               {onDelete &&

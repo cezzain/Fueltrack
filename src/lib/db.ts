@@ -39,6 +39,11 @@ function db(): Promise<IDBPDatabase<FuelTrackDB>> {
         database.createObjectStore('meta', { keyPath: 'key' });
       },
     });
+    // Don't memoize a rejection: iOS WebKit can transiently drop the IDB
+    // connection (backgrounding, storage pressure) — let the next call retry.
+    dbPromise.catch(() => {
+      dbPromise = null;
+    });
   }
   return dbPromise;
 }
@@ -90,6 +95,10 @@ export async function savePhoto(id: string, dataUrl: string): Promise<void> {
   await (await db()).put('photos', { id, dataUrl });
 }
 
+export async function deletePhoto(id: string): Promise<void> {
+  await (await db()).delete('photos', id);
+}
+
 export async function getPhoto(id: string): Promise<string | undefined> {
   return (await (await db()).get('photos', id))?.dataUrl;
 }
@@ -113,6 +122,34 @@ export async function getMeta<T>(key: string): Promise<T | undefined> {
 
 export async function setMeta(key: string, value: unknown): Promise<void> {
   await (await db()).put('meta', { key, value });
+}
+
+/**
+ * Atomically seed first-run data: the guard check, meal writes, day flags,
+ * and the guard write all happen in ONE readwrite transaction, so concurrent
+ * invocations (StrictMode double-mount, two tabs) can't double-seed and a
+ * killed tab can't leave a half-seeded store behind.
+ * Returns false if the guard was already set.
+ */
+export async function seedOnce(
+  guardKey: string,
+  meals: Meal[],
+  dayFlags: DayFlags[],
+): Promise<boolean> {
+  const database = await db();
+  const tx = database.transaction(['meals', 'days', 'meta'], 'readwrite');
+  const existing = await tx.objectStore('meta').get(guardKey);
+  if (existing) {
+    await tx.done;
+    return false;
+  }
+  const mealStore = tx.objectStore('meals');
+  const dayStore = tx.objectStore('days');
+  for (const meal of meals) void mealStore.put(meal);
+  for (const flags of dayFlags) void dayStore.put(flags);
+  void tx.objectStore('meta').put({ key: guardKey, value: true });
+  await tx.done;
+  return true;
 }
 
 // ---- summaries ----
