@@ -73,7 +73,10 @@ Respond with STRICT JSON only — no markdown fences, no preamble, no trailing t
 export function parseAnalysis(raw: string): AnalysisResult {
   const parsed = extractJson(raw);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new ClaudeError('The AI response was not valid JSON — retry the analysis.', true);
+    throw new ClaudeError(
+      `The AI response was not valid JSON — retry the analysis.${diagnosticSuffix(raw)}`,
+      true,
+    );
   }
   const obj = parsed as Record<string, unknown>;
   const rawItems = Array.isArray(obj.items) ? obj.items : null;
@@ -117,6 +120,19 @@ export function extractJson(raw: string): unknown {
   } catch {
     return null;
   }
+}
+
+/**
+ * A short, safe preview of what the model actually returned, appended to
+ * parse-failure error messages. Without this, "not valid JSON" gives no clue
+ * whether the response was empty, truncated mid-object, wrapped in prose the
+ * fence-stripping missed, or something else entirely.
+ */
+function diagnosticSuffix(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return ' (the response was empty)';
+  const preview = trimmed.slice(0, 180).replace(/\s+/g, ' ');
+  return ` Response started with: "${preview}${trimmed.length > 180 ? '…' : ''}"`;
 }
 
 function sum(items: AnalysisItem[], field: 'protein_g' | 'calories'): number {
@@ -242,7 +258,10 @@ export async function generateWeeklyInsights(
 export function parseInsights(raw: string): WeeklyInsights {
   const parsed = extractJson(raw);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new ClaudeError('The AI insights response was not valid JSON — retry.', true);
+    throw new ClaudeError(
+      `The AI insights response was not valid JSON — retry.${diagnosticSuffix(raw)}`,
+      true,
+    );
   }
   const obj = parsed as Record<string, unknown>;
   const day = (v: unknown): { dateKey: string; reason: string } => {

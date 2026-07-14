@@ -85,18 +85,41 @@ async function generate(
 
   const data = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+    promptFeedback?: { blockReason?: string };
   };
+
+  // The whole prompt can be blocked before any candidate is produced (e.g. a
+  // food photo that trips a safety filter) — there's no candidate to inspect
+  // for finishReason in that case, so check this first.
+  if (data.promptFeedback?.blockReason) {
+    throw new AiError(
+      `Gemini declined this request (${data.promptFeedback.blockReason}) — try again or rephrase.`,
+      false,
+    );
+  }
+
   const candidate = data.candidates?.[0];
   const text = (candidate?.content?.parts ?? [])
     .map((p) => p.text ?? '')
     .join('\n')
     .trim();
+
+  const finishReason = candidate?.finishReason;
   if (!text) {
-    const truncated = candidate?.finishReason === 'MAX_TOKENS';
+    if (finishReason === 'MAX_TOKENS') {
+      throw new AiError('Gemini ran out of output space before answering — retry.', true);
+    }
+    if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+      throw new AiError(`Gemini declined to answer (${finishReason.toLowerCase()}) — retry.`, false);
+    }
+    throw new AiError('Gemini returned an empty response — retry the analysis.', true);
+  }
+  // Partial text with a non-STOP finish reason means the JSON is likely cut
+  // off mid-object — surface that distinctly rather than a generic parse
+  // failure once this reaches parseAnalysis/parseInsights.
+  if (finishReason && finishReason !== 'STOP') {
     throw new AiError(
-      truncated
-        ? 'Gemini ran out of output space before answering — retry.'
-        : 'Gemini returned an empty response — retry the analysis.',
+      `Gemini stopped early (${finishReason.toLowerCase()}) before finishing its answer — retry.`,
       true,
     );
   }
