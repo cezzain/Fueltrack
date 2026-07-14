@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+@theme {
+  /* Surfaces — near-black stack */
+  --color-bg: #0b0d10;
+  --color-surface: #13161b;
+  --color-surface-2: #1a1e25;
+  --color-edge: #242a33;
+
+  /* Ink */
+  --color-ink: #e8edf2;
+  --color-ink-dim: #8a94a3;
+  --color-ink-faint: #59636f;
+
+  /* Accent — protein / primary (validated vs #0b0d10) */
+  --color-accent: #00a87e;
+  --color-accent-bright: #2ce5b4;
+  --color-accent-dim: #00a87e33;
+
+  /* Calories ring — quiet cool blue (validated vs #0b0d10) */
+  --color-cal: #4c8df6;
+  --color-cal-bright: #8ab4ff;
+  --color-cal-dim: #4c8df633;
+
+  /* Status */
+  --color-warn: #e0b25c;
+  --color-danger: #e5484d;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  --animate-ring-pop: ring-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-rise: rise 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  @keyframes ring-pop {
+    from { transform: scale(0.92); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  @keyframes rise {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+}
+
+@layer base {
+  html {
+    background: var(--color-bg);
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+    min-height: 100dvh;
+  }
+
+  /* Numbers everywhere read as data: tabular figures in the mono stack. */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  input, textarea, select {
+    color-scheme: dark;
+  }
+
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
