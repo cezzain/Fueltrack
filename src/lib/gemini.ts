@@ -45,6 +45,12 @@ async function generate(
         generationConfig: {
           maxOutputTokens,
           responseMimeType: 'application/json',
+          // Flash models "think" by default, and those reasoning tokens are
+          // deducted from maxOutputTokens before any JSON is written — with a
+          // tight budget the model can burn it all thinking and return
+          // truncated/empty text. This is a fixed-shape extraction task with
+          // no need for extended reasoning, so turn thinking off.
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     });
@@ -78,14 +84,21 @@ async function generate(
   }
 
   const data = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
+    candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
   };
-  const text = (data.candidates?.[0]?.content?.parts ?? [])
+  const candidate = data.candidates?.[0];
+  const text = (candidate?.content?.parts ?? [])
     .map((p) => p.text ?? '')
     .join('\n')
     .trim();
   if (!text) {
-    throw new AiError('Gemini returned an empty response — retry the analysis.', true);
+    const truncated = candidate?.finishReason === 'MAX_TOKENS';
+    throw new AiError(
+      truncated
+        ? 'Gemini ran out of output space before answering — retry.'
+        : 'Gemini returned an empty response — retry the analysis.',
+      true,
+    );
   }
   return text;
 }
@@ -148,7 +161,7 @@ export async function geminiWeeklyInsights(
     apiKey,
     INSIGHTS_SYSTEM,
     [{ text: `Last 7 days of data:\n${JSON.stringify(payload, null, 2)}` }],
-    1024,
+    2048,
   );
   return parseInsights(text);
 }
