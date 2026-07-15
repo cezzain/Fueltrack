@@ -15,7 +15,8 @@
     "@fontsource/space-grotesk": "^5.2.10",
     "idb": "^8.0.3",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "redis": "^4.7.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.2",

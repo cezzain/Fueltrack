@@ -1,26 +1,37 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createClient, type RedisClientType } from 'redis';
 
 /**
  * FuelTrack cross-device sync store.
  *
  * A single JSON snapshot per "account", keyed by a SHA-256 namespace the
  * client derives from the user's secret sync code (the raw code never reaches
- * here). Backed by Upstash Redis over its REST API — works with either the
- * Vercel-KV-style env vars or Upstash's own, whichever the connected storage
- * integration injects.
+ * here). Backed by Vercel's native Redis (node-redis over a TCP connection
+ * string), also falling back to Upstash's REST API if that's what's
+ * connected instead — whichever the storage integration injects.
  *
  * GET  /api/sync?ns=<hex>  -> { snapshot } | 404 if empty
  * PUT  /api/sync?ns=<hex>  body { snapshot } -> 204
  */
 
+/** Any env var that looks like a Redis connection string (redis:// or rediss://). */
+function findConnectionUrl(): { url: string; source: string } | null {
+  const e = process.env;
+  const known = ['REDIS_URL', 'KV_URL', 'REDIS_CONNECTION_STRING'];
+  for (const k of known) {
+    if (e[k]) return { url: e[k] as string, source: k };
+  }
+  for (const [k, v] of Object.entries(e)) {
+    if (v && /^rediss?:\/\//.test(v) && /redis|kv/i.test(k)) return { url: v, source: k };
+  }
+  return null;
+}
+
 /**
- * Find the Upstash/KV REST credentials regardless of what the connected
- * storage integration named them. Tries the well-known pairs first, then
- * falls back to any `<PREFIX>REST_API_URL` (or `<PREFIX>REST_URL`) that has a
- * matching token var — this covers custom env-var prefixes chosen in the
- * Vercel Marketplace flow.
+ * Find Upstash/KV REST credentials (fetch-based, no TCP) as a fallback for
+ * whichever integration named its env vars slightly differently.
  */
-function resolveCreds(): { url: string; token: string; source: string } | null {
+function resolveRestCreds(): { url: string; token: string; source: string } | null {
   const e = process.env;
   const known: [string, string][] = [
     ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
@@ -62,40 +73,43 @@ function redisKey(ns: string): string {
   return `ft:sync:${ns}`;
 }
 
-async function redisGet(url: string, token: string, key: string): Promise<string | null> {
-  const res = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`redis get ${res.status}`);
-  const body = (await res.json()) as { result: string | null };
-  return body.result;
-}
+// Reused across warm invocations of the same function instance so we don't
+// reconnect on every request.
+let tcpClient: Promise<RedisClientType> | null = null;
 
-async function redisSet(url: string, token: string, key: string, value: string): Promise<void> {
-  const res = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: value,
-  });
-  if (!res.ok) throw new Error(`redis set ${res.status}`);
+function getTcpClient(url: string): Promise<RedisClientType> {
+  if (!tcpClient) {
+    const client = createClient({ url }) as RedisClientType;
+    client.on('error', () => {
+      // Swallow — a broken connection surfaces as a rejected command instead,
+      // which the request handler already catches and reports as a 502.
+    });
+    tcpClient = client.connect().then(() => client);
+    tcpClient.catch(() => {
+      tcpClient = null; // let the next request retry the connection
+    });
+  }
+  return tcpClient;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  const creds = resolveCreds();
+  const connUrl = findConnectionUrl();
+  const restCreds = connUrl ? null : resolveRestCreds();
 
   // Safe diagnostic: `/api/sync?diag=1` reports whether storage was found and
   // which storage-related env var NAMES exist (never any values). Lets us tell
   // a "not connected / not redeployed" problem from a "named differently" one.
   if (req.query.diag != null) {
     res.status(200).json({
-      configured: creds != null,
-      matchedVar: creds?.source ?? null,
+      configured: connUrl != null || restCreds != null,
+      mode: connUrl ? 'tcp' : restCreds ? 'rest' : null,
+      matchedVar: connUrl?.source ?? restCreds?.source ?? null,
       storageEnvNames: storageEnvNames(),
     });
     return;
   }
 
-  if (!creds) {
+  if (!connUrl && !restCreds) {
     res.status(503).json({ error: 'Sync storage is not configured on the server.' });
     return;
   }
@@ -110,7 +124,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   try {
     if (req.method === 'GET') {
-      const value = await redisGet(creds.url, creds.token, key);
+      const value = connUrl
+        ? await (await getTcpClient(connUrl.url)).get(key)
+        : await restGet(restCreds!.url, restCreds!.token, key);
       if (value == null) {
         res.status(404).json({ error: 'No snapshot yet.' });
         return;
@@ -130,7 +146,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         res.status(413).json({ error: 'Snapshot too large.' });
         return;
       }
-      await redisSet(creds.url, creds.token, key, value);
+      if (connUrl) {
+        await (await getTcpClient(connUrl.url)).set(key, value);
+      } else {
+        await restSet(restCreds!.url, restCreds!.token, key, value);
+      }
       res.status(204).end();
       return;
     }
@@ -140,4 +160,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   } catch (err) {
     res.status(502).json({ error: `Sync storage error: ${(err as Error).message}` });
   }
+}
+
+async function restGet(url: string, token: string, key: string): Promise<string | null> {
+  const res = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`redis get ${res.status}`);
+  const body = (await res.json()) as { result: string | null };
+  return body.result;
+}
+
+async function restSet(url: string, token: string, key: string, value: string): Promise<void> {
+  const res = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: value,
+  });
+  if (!res.ok) throw new Error(`redis set ${res.status}`);
 }
