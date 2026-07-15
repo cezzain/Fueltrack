@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { CachedInsights, DaySummary, WeeklyInsights } from '../types';
+import type { CachedInsights, ChatMessage, DaySummary, Settings, WeeklyInsights } from '../types';
 import { activeApiKey } from '../types';
 import { useApp, useDaySummaries } from '../state/AppContext';
 import { APP_TZ, formatDayLabel, formatTime, lastNDateKeys } from '../lib/dates';
-import { AiError, generateWeeklyInsights } from '../lib/ai';
+import { AiError, chatAboutInsights, generateWeeklyInsights } from '../lib/ai';
 import { useOnline } from '../hooks/useOnline';
 import { getCachedInsights, saveCachedInsights } from '../lib/db';
 
@@ -111,6 +111,7 @@ export function Insights() {
             todayKey={todayKey}
             canRefresh={hasKey}
             onRefresh={() => void generate()}
+            settings={settings}
           />
         )}
       </>
@@ -127,6 +128,7 @@ export function Insights() {
         todayKey={todayKey}
         canRefresh={hasKey}
         onRefresh={() => void generate()}
+        settings={settings}
       />
     );
   } else if (!hasKey) {
@@ -184,6 +186,7 @@ interface InsightsBodyProps {
   todayKey: string;
   canRefresh: boolean;
   onRefresh: () => void;
+  settings: Settings;
 }
 
 function InsightsBody({
@@ -196,6 +199,7 @@ function InsightsBody({
   todayKey,
   canRefresh,
   onRefresh,
+  settings,
 }: InsightsBodyProps) {
   const insights = cached.insights;
   return (
@@ -267,7 +271,124 @@ function InsightsBody({
           <p className="serif mt-2 text-[18px] leading-[1.4]">{insights.suggestion}</p>
         </section>
       )}
+
+      {days && canRefresh && (
+        <InsightsChat
+          key={cached.generatedAt}
+          days={days}
+          settings={settings}
+          insights={insights}
+          online={online}
+        />
+      )}
     </>
+  );
+}
+
+// ---- follow-up chat ----
+
+function InsightsChat({
+  days,
+  settings,
+  insights,
+  online,
+}: {
+  days: DaySummary[];
+  settings: Settings;
+  insights: WeeklyInsights;
+  online: boolean;
+}) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, sending]);
+
+  const send = useCallback(async () => {
+    const question = input.trim();
+    if (!question || sending) return;
+    const next: ChatMessage[] = [...messages, { role: 'user', content: question }];
+    setMessages(next);
+    setInput('');
+    setSending(true);
+    setChatError(null);
+    try {
+      const reply = await chatAboutInsights(settings, days, insights, next);
+      setMessages((m) => [...m, { role: 'assistant', content: reply }]);
+    } catch (err) {
+      setChatError(
+        err instanceof AiError ? err.message : 'Something went wrong asking that — try again.',
+      );
+    } finally {
+      setSending(false);
+    }
+  }, [input, sending, messages, settings, days, insights]);
+
+  return (
+    <section className="animate-rise border-[1.5px] border-edge bg-surface p-4">
+      <h2 className="label-caps text-[11px] tracking-[0.12em] text-ink">Ask about your week</h2>
+
+      {messages.length === 0 ? (
+        <p className="serif mt-2 text-[13px] italic leading-relaxed text-ink-faint">
+          e.g. &ldquo;How long until I see results?&rdquo; or &ldquo;Why was Tuesday my best
+          day?&rdquo;
+        </p>
+      ) : (
+        <div ref={scrollRef} className="mt-3 flex max-h-72 flex-col gap-2.5 overflow-y-auto">
+          {messages.map((m, i) => (
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <p
+                className={`max-w-[85%] px-3 py-2 text-[13px] leading-relaxed ${
+                  m.role === 'user'
+                    ? 'bg-ink text-surface'
+                    : 'serif border border-hairline text-ink-dim'
+                }`}
+              >
+                {m.content}
+              </p>
+            </div>
+          ))}
+          {sending && (
+            <p className="serif text-[13px] italic text-ink-faint">Thinking&hellip;</p>
+          )}
+        </div>
+      )}
+
+      {chatError && <p className="mt-2 text-[12px] leading-relaxed text-danger">{chatError}</p>}
+
+      {!online && messages.length === 0 ? (
+        <p className="mt-3 text-[12px] text-ink-faint">Reconnect to ask a question.</p>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send();
+          }}
+          className="mt-3 flex gap-2"
+        >
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask a follow-up…"
+            disabled={sending}
+            className="min-h-11 min-w-0 flex-1 border border-hairline bg-transparent px-3 text-[14px] text-ink placeholder:text-ink-faint focus:border-ink focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={sending || !input.trim()}
+            className="label-caps min-h-11 shrink-0 border-[1.5px] border-edge bg-accent px-4 text-[11px] text-surface active:translate-y-px disabled:opacity-40"
+          >
+            Ask
+          </button>
+        </form>
+      )}
+    </section>
   );
 }
 

@@ -88,6 +88,12 @@ export interface CachedInsights {
   insights: WeeklyInsights;
 }
 
+/** One turn in the follow-up chat about a generated weekly insights summary. */
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export type AiProvider = 'claude' | 'gemini';
 
 export interface Settings {

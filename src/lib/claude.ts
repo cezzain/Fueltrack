@@ -1,5 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { AnalysisItem, AnalysisResult, Confidence, DaySummary, Settings, WeeklyInsights } from '../types';
+import type {
+  AnalysisItem,
+  AnalysisResult,
+  ChatMessage,
+  Confidence,
+  DaySummary,
+  Settings,
+  WeeklyInsights,
+} from '../types';
 import { formatDayLabel } from './dates';
 
 /** Vision-capable model, per app spec. */
@@ -219,14 +227,9 @@ Respond with STRICT JSON only — no markdown fences, no preamble. Exactly this 
 }
 Keep it encouraging but honest. 2-4 trends max.`;
 
-/** One Claude call over the last 7 days of data → structured weekly insights. */
-export async function generateWeeklyInsights(
-  apiKey: string,
-  days: DaySummary[],
-  settings: Settings,
-): Promise<WeeklyInsights> {
-  const client = makeClient(apiKey);
-  const payload = {
+/** Shared shape sent to the model for both the weekly-insights call and the follow-up chat. */
+export function buildWeeklyPayload(days: DaySummary[], settings: Settings) {
+  return {
     targets: { protein_g: settings.proteinTarget_g, calories: settings.calorieTarget_kcal },
     profile: { heightCm: settings.heightCm, weightKg: settings.weightKg },
     days: days.map((d) => ({
@@ -238,6 +241,16 @@ export async function generateWeeklyInsights(
       meals: d.meals.map((m) => ({ name: m.name, protein_g: m.protein_g, calories: m.calories })),
     })),
   };
+}
+
+/** One Claude call over the last 7 days of data → structured weekly insights. */
+export async function generateWeeklyInsights(
+  apiKey: string,
+  days: DaySummary[],
+  settings: Settings,
+): Promise<WeeklyInsights> {
+  const client = makeClient(apiKey);
+  const payload = buildWeeklyPayload(days, settings);
   try {
     const response = await client.messages.create({
       model: MODEL,
@@ -277,4 +290,47 @@ export function parseInsights(raw: string): WeeklyInsights {
     worst_day: day(obj.worst_day),
     suggestion: asString(obj.suggestion, ''),
   };
+}
+
+export const INSIGHTS_CHAT_SYSTEM = `You are the weekly coach inside FuelTrack, continuing a conversation about the weekly summary you already gave an 18-year-old, 6'1", 61 kg basketball player (6 days/week) on a lean bulk.
+
+Answer follow-up questions conversationally and concretely, grounded in the week's logged data and the summary below. If asked something like how long a change will take to show results, give a realistic timeframe for a lean bulk at this training frequency rather than hedging. Keep replies short — 2-5 sentences of plain prose, no markdown headers, no JSON. If the logged data genuinely can't answer something, say so briefly and still give your best practical guidance.`;
+
+/** Builds the system-prompt context block shared by both AI providers' chat calls. */
+export function buildInsightsChatContext(
+  days: DaySummary[],
+  settings: Settings,
+  insights: WeeklyInsights,
+): string {
+  const payload = { ...buildWeeklyPayload(days, settings), insights_already_given: insights };
+  return `${INSIGHTS_CHAT_SYSTEM}\n\nHere is the week's logged data and the summary you already gave:\n${JSON.stringify(payload, null, 2)}`;
+}
+
+/** Follow-up chat about an already-generated weekly summary — plain text, not JSON. */
+export async function chatAboutInsights(
+  apiKey: string,
+  days: DaySummary[],
+  settings: Settings,
+  insights: WeeklyInsights,
+  history: ChatMessage[],
+): Promise<string> {
+  const client = makeClient(apiKey);
+  const system = buildInsightsChatContext(days, settings, insights);
+  try {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 512,
+      system,
+      messages: history.map((m) => ({ role: m.role, content: m.content })),
+    });
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n')
+      .trim();
+    if (!text) throw new ClaudeError('Empty response — retry.', true);
+    return text;
+  } catch (err) {
+    throw toFriendlyError(err);
+  }
 }

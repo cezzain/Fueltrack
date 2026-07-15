@@ -1,12 +1,13 @@
-import type { AnalysisResult, DaySummary, Settings, WeeklyInsights } from '../types';
+import type { AnalysisResult, ChatMessage, DaySummary, Settings, WeeklyInsights } from '../types';
 import {
   ANALYSIS_SYSTEM,
+  buildInsightsChatContext,
+  buildWeeklyPayload,
   ClaudeError as AiError,
   INSIGHTS_SYSTEM,
   parseAnalysis,
   parseInsights,
 } from './claude';
-import { formatDayLabel } from './dates';
 
 /**
  * Google AI Studio (Gemini API) — vision-capable, browser-callable with an
@@ -22,11 +23,21 @@ interface GeminiPart {
   inlineData?: { mimeType: string; data: string };
 }
 
-async function generate(
+interface GeminiContent {
+  role: 'user' | 'model';
+  parts: GeminiPart[];
+}
+
+/**
+ * Shared request/response plumbing for both the strict-JSON extraction calls
+ * (analysis, insights) and the free-form follow-up chat.
+ */
+async function callGemini(
   apiKey: string,
   system: string,
-  parts: GeminiPart[],
+  contents: GeminiContent[],
   maxOutputTokens: number,
+  json: boolean,
 ): Promise<string> {
   if (!apiKey.trim()) {
     throw new AiError('No Gemini API key set. Add it in Settings first.', false);
@@ -41,15 +52,15 @@ async function generate(
       },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts }],
+        contents,
         generationConfig: {
           maxOutputTokens,
-          responseMimeType: 'application/json',
+          ...(json ? { responseMimeType: 'application/json' } : {}),
           // Flash models "think" by default, and those reasoning tokens are
           // deducted from maxOutputTokens before any JSON is written — with a
           // tight budget the model can burn it all thinking and return
-          // truncated/empty text. This is a fixed-shape extraction task with
-          // no need for extended reasoning, so turn thinking off.
+          // truncated/empty text. None of these calls need extended
+          // reasoning, so turn thinking off.
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),
@@ -112,10 +123,10 @@ async function generate(
     if (finishReason === 'SAFETY' || finishReason === 'RECITATION') {
       throw new AiError(`Gemini declined to answer (${finishReason.toLowerCase()}) — retry.`, false);
     }
-    throw new AiError('Gemini returned an empty response — retry the analysis.', true);
+    throw new AiError('Gemini returned an empty response — retry.', true);
   }
-  // Partial text with a non-STOP finish reason means the JSON is likely cut
-  // off mid-object — surface that distinctly rather than a generic parse
+  // Partial text with a non-STOP finish reason means the response is likely
+  // cut off mid-way — surface that distinctly rather than a generic parse
   // failure once this reaches parseAnalysis/parseInsights.
   if (finishReason && finishReason !== 'STOP') {
     throw new AiError(
@@ -124,6 +135,26 @@ async function generate(
     );
   }
   return text;
+}
+
+/** Single-turn strict-JSON call (meal analysis, weekly insights). */
+function generate(
+  apiKey: string,
+  system: string,
+  parts: GeminiPart[],
+  maxOutputTokens: number,
+): Promise<string> {
+  return callGemini(apiKey, system, [{ role: 'user', parts }], maxOutputTokens, true);
+}
+
+/** Multi-turn free-form chat call — plain text, not JSON. */
+function generateChat(
+  apiKey: string,
+  system: string,
+  contents: GeminiContent[],
+  maxOutputTokens: number,
+): Promise<string> {
+  return callGemini(apiKey, system, contents, maxOutputTokens, false);
 }
 
 export async function geminiAnalyzeMealPhoto(
@@ -168,18 +199,7 @@ export async function geminiWeeklyInsights(
   days: DaySummary[],
   settings: Settings,
 ): Promise<WeeklyInsights> {
-  const payload = {
-    targets: { protein_g: settings.proteinTarget_g, calories: settings.calorieTarget_kcal },
-    profile: { heightCm: settings.heightCm, weightKg: settings.weightKg },
-    days: days.map((d) => ({
-      dateKey: d.dateKey,
-      label: formatDayLabel(d.dateKey),
-      protein_g: d.protein_g,
-      calories: d.calories,
-      lightDay: d.lightDay,
-      meals: d.meals.map((m) => ({ name: m.name, protein_g: m.protein_g, calories: m.calories })),
-    })),
-  };
+  const payload = buildWeeklyPayload(days, settings);
   const text = await generate(
     apiKey,
     INSIGHTS_SYSTEM,
@@ -187,4 +207,20 @@ export async function geminiWeeklyInsights(
     2048,
   );
   return parseInsights(text);
+}
+
+/** Follow-up chat about an already-generated weekly summary — plain text, not JSON. */
+export async function geminiChatAboutInsights(
+  apiKey: string,
+  days: DaySummary[],
+  settings: Settings,
+  insights: WeeklyInsights,
+  history: ChatMessage[],
+): Promise<string> {
+  const system = buildInsightsChatContext(days, settings, insights);
+  const contents: GeminiContent[] = history.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+  return generateChat(apiKey, system, contents, 512);
 }
