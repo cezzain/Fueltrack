@@ -13,6 +13,12 @@
    sharp corners, ink borders, hard offset shadows.
    ------------------------------------------------------------------ */
 @theme {
+  /* Desktop ("PC") layout switch. Lowered from Tailwind's default 768px so
+     every iPad flips to the wide layout — including an iPad mini in portrait
+     (744px CSS width), which sat just under the default line. Still safely
+     above every phone's portrait width, so phones keep the mobile layout. */
+  --breakpoint-md: 700px;
+
   /* Paper surfaces */
   --color-bg: #f4f2ed;
   --color-surface: #f9f8f4;
