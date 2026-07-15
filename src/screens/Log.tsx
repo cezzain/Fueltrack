@@ -325,7 +325,7 @@ export function Log() {
   );
 
   return (
-    <div className="space-y-4 md:max-w-[560px]">
+    <div className="w-full space-y-4">
       <header className="mt-5 md:mt-0">
         <h1 className="serif text-[40px] leading-none text-ink md:text-[56px]">Log a meal</h1>
         <p className="mt-2 text-[13px] text-ink-faint">
@@ -336,7 +336,7 @@ export function Log() {
       </header>
 
       {phase === 'review' && analysis ? (
-        <div className="space-y-3">
+        <div className="space-y-3 md:mx-auto md:max-w-[680px]">
           {error && (
             <div className="animate-rise border-[1.5px] border-danger bg-surface p-3">
               <p className="text-sm leading-relaxed text-ink">{error.message}</p>
@@ -360,7 +360,7 @@ export function Log() {
           />
         </div>
       ) : phase === 'analyzing' ? (
-        <div className="space-y-4">
+        <div className="space-y-4 md:mx-auto md:max-w-[600px]">
           {mode === 'photo' && photo && (
             <img
               src={photo.dataUrl}
@@ -383,7 +383,8 @@ export function Log() {
           </div>
         </div>
       ) : (
-        <>
+        <div className="md:grid md:grid-cols-[minmax(0,360px)_1fr] md:items-start md:gap-10">
+          <div className="space-y-4">
           {/* Mode switch */}
           <div className="flex border-[1.5px] border-edge">
             {MODES.map((m, i) => (
@@ -438,7 +439,9 @@ export function Log() {
               )}
             </div>
           )}
+          </div>
 
+          <div className="mt-4 space-y-3 md:mt-0">
           {mode === 'photo' && (
             <div className="space-y-3">
               {photo ? (
@@ -473,7 +476,7 @@ export function Log() {
                     type="button"
                     onClick={() => cameraRef.current?.click()}
                     disabled={compressing}
-                    className="paper-stripes flex aspect-[4/3] w-full flex-col items-center justify-center gap-2.5 border-[1.5px] border-dashed border-edge active:translate-y-px disabled:opacity-60"
+                    className="paper-stripes flex aspect-[4/3] w-full flex-col items-center justify-center gap-2.5 border-[1.5px] border-dashed border-edge active:translate-y-px disabled:opacity-60 md:aspect-auto md:h-[380px]"
                   >
                     <span className="serif text-[24px] text-ink">
                       {compressing ? 'Processing photo…' : 'Take a photo'}
@@ -584,7 +587,8 @@ export function Log() {
               </button>
             </div>
           )}
-        </>
+          </div>
+        </div>
       )}
     </div>
   );

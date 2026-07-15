@@ -35,13 +35,14 @@ function Screens() {
   // All screens stay mounted (hidden with CSS) so switching tabs never
   // discards in-flight state — a taken photo, a running analysis, or an
   // unsaved review card on the Log screen survives a detour to Settings.
-  // Layout is mobile-first: a full-bleed 448px column with a bottom TabBar,
-  // which on md+ becomes the editorial "sheet" — a bordered paper card with a
-  // hard offset shadow floating on the warm background, per the design mockups.
+  // Mobile: a full-bleed 448px column with a bottom TabBar. On md+ the app
+  // becomes the editorial "sheet" — a bordered paper card with a hard offset
+  // shadow that fills the viewport like a slide; each screen lays its content
+  // across the full width (main centers a short screen vertically).
   return (
-    <div className="app-shell mx-auto min-h-dvh max-w-md safe-top md:my-8 md:min-h-[calc(100dvh-4rem)] md:max-w-[1180px] md:border-[1.5px] md:border-edge md:bg-surface md:shadow-offset-8 xl:my-10 xl:min-h-0 xl:max-w-[980px]">
+    <div className="app-shell mx-auto min-h-dvh max-w-md safe-top md:my-8 md:flex md:min-h-[calc(100dvh-4rem)] md:max-w-[1600px] md:flex-col md:border-[1.5px] md:border-edge md:bg-surface md:shadow-offset-8">
       <TopNav />
-      <main className="px-5 pb-28 pt-5 md:px-10 md:pb-14 md:pt-9">
+      <main className="px-5 pb-28 pt-5 md:flex-1 md:px-12 md:pb-12 md:pt-10">
         <Masthead />
         <div hidden={tab !== 'today'}>
           <Today />

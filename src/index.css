@@ -116,16 +116,6 @@
 }
 
 @layer utilities {
-  /* On large monitors the 1200px desktop layout reads small with wide empty
-     margins. Scale the whole shell up (text + layout together) past 1280px;
-     the width is capped so the zoomed result still fits without a horizontal
-     scrollbar (1000px × 1.2 ≈ 1200px effective). */
-  @media (width >= 1280px) {
-    .app-shell {
-      zoom: 1.2;
-    }
-  }
-
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }

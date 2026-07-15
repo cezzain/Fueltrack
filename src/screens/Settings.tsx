@@ -272,9 +272,12 @@ export function Settings() {
   const hasKey = activeKey.length > 0;
 
   return (
-    <div className="flex flex-col gap-6 md:max-w-[560px]">
+    <div className="w-full">
       <h1 className="serif mt-5 text-[40px] leading-none text-ink md:mt-0 md:text-[56px]">Settings</h1>
 
+      {/* Sections stack on phone; on desktop they pack into 2–3 balanced
+          columns so the wide sheet isn't a skinny strip of settings. */}
+      <div className="mt-6 columns-1 gap-6 md:columns-2 lg:columns-3 [&>*]:mb-6 [&>*]:break-inside-avoid">
       <Section
         title="AI provider"
         chip={
@@ -424,6 +427,7 @@ export function Settings() {
         </button>
         <p className="mt-2 text-xs text-ink-faint">Photos stay on-device and aren't included.</p>
       </Section>
+      </div>
 
       <footer className="pt-2 text-center text-xs leading-relaxed text-ink-faint">
         <p>FuelTrack · local-only data · AI analysis by {activeModelLabel(settings)}</p>

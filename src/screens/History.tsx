@@ -153,33 +153,37 @@ export function History() {
   const visible = [...days].reverse().filter((d) => d.mealCount > 0 || d.dateKey === todayKey);
 
   return (
-    <div className="md:max-w-[760px]">
+    <div className="w-full">
       <header className="mt-5 md:mt-0">
         <h1 className="serif text-[40px] leading-none text-ink md:text-[56px]">History</h1>
         <p className="mt-2 text-[13px] text-ink-faint">Last 30 days</p>
       </header>
 
-      <div className="mt-4">
+      <div className="mt-4 md:max-w-[640px]">
         <WeeklyAverages days={days} proteinTarget={settings.proteinTarget_g} />
       </div>
 
+      {/* Day rows stack on phone; on desktop they flow into two/three columns
+          so the month's history fills the sheet instead of a single strip. */}
       <section className="mt-5">
         {visible.length === 0 ? (
           <p className="serif mt-4 text-[16px] italic text-ink-faint">
             No days logged yet — meals you log will show up here, day by day.
           </p>
         ) : (
-          visible.map((day) => (
-            <DayRow
-              key={day.dateKey}
-              day={day}
-              isToday={day.dateKey === todayKey}
-              proteinTarget={settings.proteinTarget_g}
-              onRepeat={repeatMeal}
-              onDelete={(m) => removeMeal(m.id)}
-              onDeleteItem={removeMealItem}
-            />
-          ))
+          <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-10 lg:grid-cols-3">
+            {visible.map((day) => (
+              <DayRow
+                key={day.dateKey}
+                day={day}
+                isToday={day.dateKey === todayKey}
+                proteinTarget={settings.proteinTarget_g}
+                onRepeat={repeatMeal}
+                onDelete={(m) => removeMeal(m.id)}
+                onDeleteItem={removeMealItem}
+              />
+            ))}
+          </div>
         )}
       </section>
     </div>
