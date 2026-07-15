@@ -38,7 +38,7 @@ function Screens() {
   // Layout is mobile-first: a single 448px column with a bottom TabBar, which
   // widens to the 1200px "PC" layout (top bar nav, multi-column screens) at md.
   return (
-    <div className="mx-auto min-h-dvh max-w-md safe-top md:max-w-[1200px]">
+    <div className="app-shell mx-auto min-h-dvh max-w-md safe-top md:max-w-[1200px] xl:min-h-0 xl:max-w-[1000px]">
       <TopNav />
       <main className="px-5 pb-28 pt-5 md:px-10 md:pb-16 md:pt-8">
         <Masthead />
