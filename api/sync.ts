@@ -13,10 +13,44 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * PUT  /api/sync?ns=<hex>  body { snapshot } -> 204
  */
 
-const REST_URL =
-  process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL ?? '';
-const REST_TOKEN =
-  process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN ?? '';
+/**
+ * Find the Upstash/KV REST credentials regardless of what the connected
+ * storage integration named them. Tries the well-known pairs first, then
+ * falls back to any `<PREFIX>REST_API_URL` (or `<PREFIX>REST_URL`) that has a
+ * matching token var — this covers custom env-var prefixes chosen in the
+ * Vercel Marketplace flow.
+ */
+function resolveCreds(): { url: string; token: string; source: string } | null {
+  const e = process.env;
+  const known: [string, string][] = [
+    ['KV_REST_API_URL', 'KV_REST_API_TOKEN'],
+    ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'],
+    ['REDIS_REST_API_URL', 'REDIS_REST_API_TOKEN'],
+    ['STORAGE_REST_API_URL', 'STORAGE_REST_API_TOKEN'],
+  ];
+  for (const [u, t] of known) {
+    if (e[u] && e[t]) return { url: e[u] as string, token: e[t] as string, source: u };
+  }
+  for (const suffix of ['REST_API_URL', 'REST_URL'] as const) {
+    const tokenSuffix = suffix.replace('URL', 'TOKEN');
+    for (const key of Object.keys(e)) {
+      if (key.endsWith(suffix)) {
+        const tokenKey = key.slice(0, -suffix.length) + tokenSuffix;
+        if (e[key] && e[tokenKey]) {
+          return { url: e[key] as string, token: e[tokenKey] as string, source: key };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/** Env var NAMES (never values) that look storage-related, for diagnostics. */
+function storageEnvNames(): string[] {
+  return Object.keys(process.env)
+    .filter((k) => /redis|kv|upstash|storage/i.test(k))
+    .sort();
+}
 
 /** Reject anything that isn't a clean 64-char hex namespace. */
 const NS_RE = /^[a-f0-9]{64}$/;
@@ -28,26 +62,40 @@ function redisKey(ns: string): string {
   return `ft:sync:${ns}`;
 }
 
-async function redisGet(key: string): Promise<string | null> {
-  const res = await fetch(`${REST_URL}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${REST_TOKEN}` },
+async function redisGet(url: string, token: string, key: string): Promise<string | null> {
+  const res = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`redis get ${res.status}`);
   const body = (await res.json()) as { result: string | null };
   return body.result;
 }
 
-async function redisSet(key: string, value: string): Promise<void> {
-  const res = await fetch(`${REST_URL}/set/${encodeURIComponent(key)}`, {
+async function redisSet(url: string, token: string, key: string, value: string): Promise<void> {
+  const res = await fetch(`${url}/set/${encodeURIComponent(key)}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${REST_TOKEN}` },
+    headers: { Authorization: `Bearer ${token}` },
     body: value,
   });
   if (!res.ok) throw new Error(`redis set ${res.status}`);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  if (!REST_URL || !REST_TOKEN) {
+  const creds = resolveCreds();
+
+  // Safe diagnostic: `/api/sync?diag=1` reports whether storage was found and
+  // which storage-related env var NAMES exist (never any values). Lets us tell
+  // a "not connected / not redeployed" problem from a "named differently" one.
+  if (req.query.diag != null) {
+    res.status(200).json({
+      configured: creds != null,
+      matchedVar: creds?.source ?? null,
+      storageEnvNames: storageEnvNames(),
+    });
+    return;
+  }
+
+  if (!creds) {
     res.status(503).json({ error: 'Sync storage is not configured on the server.' });
     return;
   }
@@ -62,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   try {
     if (req.method === 'GET') {
-      const value = await redisGet(key);
+      const value = await redisGet(creds.url, creds.token, key);
       if (value == null) {
         res.status(404).json({ error: 'No snapshot yet.' });
         return;
@@ -82,7 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         res.status(413).json({ error: 'Snapshot too large.' });
         return;
       }
-      await redisSet(key, value);
+      await redisSet(creds.url, creds.token, key, value);
       res.status(204).end();
       return;
     }
