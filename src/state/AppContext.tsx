@@ -12,7 +12,8 @@ import {
 import type { AnalysisResult, DaySummary, Meal, MealSource, MealType, Settings, Tab } from '../types';
 import { newId } from '../types';
 import * as db from '../lib/db';
-import { todayKey as computeTodayKey } from '../lib/dates';
+import { todayKey as computeTodayKey, weekDateKeys } from '../lib/dates';
+import { computeEffectiveTargets, type EffectiveTargets } from '../lib/targets';
 import { loadSettings, saveSettings } from '../lib/settings';
 import { seedIfNeeded } from '../lib/seed';
 
@@ -44,6 +45,8 @@ interface AppContextValue {
   repeatMeal: (meal: Meal) => Promise<Meal>;
   updateMeal: (meal: Meal) => Promise<void>;
   removeMeal: (id: string) => Promise<void>;
+  /** Remove one food item from a meal, recomputing its totals — deletes the whole meal if it was the last item. */
+  removeMealItem: (meal: Meal, itemId: string) => Promise<void>;
   setLightDay: (dateKey: string, lightDay: boolean) => Promise<void>;
 }
 
@@ -178,6 +181,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [bump],
   );
 
+  const removeMealItem = useCallback(
+    async (meal: Meal, itemId: string) => {
+      const items = meal.items.filter((it) => it.id !== itemId);
+      if (items.length === 0) {
+        // No items left — remove the whole meal (and its photo).
+        await db.deleteMeal(meal.id);
+      } else {
+        const updated: Meal = {
+          ...meal,
+          items,
+          protein_g: Math.round(items.reduce((sum, it) => sum + it.protein_g, 0)),
+          calories: Math.round(items.reduce((sum, it) => sum + it.calories, 0)),
+        };
+        await db.putMeal(updated);
+      }
+      bump();
+    },
+    [bump],
+  );
+
   const setLightDay = useCallback(
     async (dateKey: string, lightDay: boolean) => {
       await db.setLightDay(dateKey, lightDay);
@@ -199,9 +222,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       repeatMeal,
       updateMeal,
       removeMeal,
+      removeMealItem,
       setLightDay,
     }),
-    [ready, todayKey, version, settings, updateSettings, tab, logMeal, repeatMeal, updateMeal, removeMeal, setLightDay],
+    [
+      ready,
+      todayKey,
+      version,
+      settings,
+      updateSettings,
+      tab,
+      logMeal,
+      repeatMeal,
+      updateMeal,
+      removeMeal,
+      removeMealItem,
+      setLightDay,
+    ],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -248,6 +285,44 @@ export function useDaySummaries(dateKeys: string[]): DaySummary[] | null {
     };
   }, [keysJoined, version, ready]);
   return summaries;
+}
+
+/** Live light-day flag for one date (e.g. checking tomorrow's status). */
+export function useLightDayFlag(dateKey: string): boolean {
+  const { version, ready } = useApp();
+  const [light, setLight] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    db.getDayFlags(dateKey).then((flags) => {
+      if (!cancelled) setLight(flags.lightDay);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dateKey, version, ready]);
+  return light;
+}
+
+/**
+ * Effective protein/calorie targets for one day, after spreading any light
+ * day's shortfall across the rest of its calendar week. Null while loading.
+ */
+export function useEffectiveTargets(dateKey: string): EffectiveTargets | null {
+  const { version, ready, settings } = useApp();
+  const [result, setResult] = useState<EffectiveTargets | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    const weekKeys = weekDateKeys(dateKey);
+    db.getLightDayFlags(weekKeys).then((flags) => {
+      if (!cancelled) setResult(computeEffectiveTargets(dateKey, flags, settings));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dateKey, version, ready, settings]);
+  return result;
 }
 
 /** Load a stored photo's data URL by id. */

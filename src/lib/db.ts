@@ -85,6 +85,15 @@ export async function getDayFlags(dateKey: string): Promise<DayFlags> {
   return flags ?? { dateKey, lightDay: false };
 }
 
+/** Batch light-day lookup — used to compute weekly compensation. */
+export async function getLightDayFlags(dateKeys: string[]): Promise<Map<string, boolean>> {
+  const database = await db();
+  const rows = await Promise.all(dateKeys.map((k) => database.get('days', k)));
+  const map = new Map<string, boolean>();
+  dateKeys.forEach((k, i) => map.set(k, rows[i]?.lightDay ?? false));
+  return map;
+}
+
 export async function setLightDay(dateKey: string, lightDay: boolean): Promise<void> {
   await (await db()).put('days', { dateKey, lightDay });
 }

@@ -46,8 +46,8 @@ export function formatTime(ts: number): string {
   return timeFmt.format(new Date(ts));
 }
 
-/** Noon UTC on the given key's date — safe representative Date for formatting a dateKey. */
-function representativeDate(dateKey: string): Date {
+/** Noon Dubai time on the given key's date — safe representative Date for formatting a dateKey. */
+export function representativeDate(dateKey: string): Date {
   return new Date(`${dateKey}T12:00:00+04:00`);
 }
 
@@ -103,4 +103,23 @@ export function suggestedMealType(): 'breakfast' | 'lunch' | 'dinner' | 'snack' 
 export function dateTimeToEpoch(dateKey: string, hhmm: string): number {
   const time = /^\d{2}:\d{2}$/.test(hhmm) ? hhmm : '12:00';
   return Date.parse(`${dateKey}T${time}:00+04:00`);
+}
+
+/** Tomorrow's Dubai-time date key. */
+export function tomorrowKey(): string {
+  return dateKeyFor(new Date(Date.now() + 24 * 60 * 60 * 1000));
+}
+
+/**
+ * Monday..Sunday date keys (Dubai time) for the calendar week containing
+ * dateKey — used to spread a light day's shortfall across the rest of its week.
+ */
+export function weekDateKeys(dateKey: string): string[] {
+  const d = representativeDate(dateKey);
+  const dow = d.getUTCDay(); // 0=Sun..6=Sat
+  const daysSinceMonday = (dow + 6) % 7;
+  const monday = new Date(d.getTime() - daysSinceMonday * 24 * 60 * 60 * 1000);
+  return Array.from({ length: 7 }, (_, i) =>
+    dateKeyFor(new Date(monday.getTime() + i * 24 * 60 * 60 * 1000)),
+  );
 }

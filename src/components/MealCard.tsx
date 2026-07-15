@@ -9,15 +9,24 @@ interface MealCardProps {
   /** One-tap re-log. Omit to hide the button. */
   onRepeat?: (meal: Meal) => void;
   onDelete?: (meal: Meal) => void;
+  /** Delete a single food item, recomputing the meal's totals. Omit to hide per-item delete. */
+  onDeleteItem?: (meal: Meal, itemId: string) => void;
   defaultExpanded?: boolean;
 }
 
 /**
  * Editorial meal row: hairline-divided list entry with a time column, serif
  * meal name, uppercase micro-meta, and orange protein figure. Expands to the
- * item breakdown; the repeat square keeps re-logging one tap.
+ * item breakdown (each item deletable individually); the repeat square keeps
+ * re-logging one tap.
  */
-export function MealCard({ meal, onRepeat, onDelete, defaultExpanded = false }: MealCardProps) {
+export function MealCard({
+  meal,
+  onRepeat,
+  onDelete,
+  onDeleteItem,
+  defaultExpanded = false,
+}: MealCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const photo = usePhoto(meal.photoId);
@@ -90,6 +99,27 @@ export function MealCard({ meal, onRepeat, onDelete, defaultExpanded = false }: 
                   <span className="num w-14 shrink-0 text-right text-ink-faint">
                     {item.calories}
                   </span>
+                  {onDeleteItem && (
+                    <button
+                      type="button"
+                      aria-label={`Remove ${item.name}`}
+                      onClick={() => onDeleteItem(meal, item.id)}
+                      className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center text-ink-faint active:text-danger"
+                    >
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

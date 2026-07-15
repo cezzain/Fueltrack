@@ -1,7 +1,8 @@
-import { useApp, useDaySummary } from '../state/AppContext';
+import { useApp, useDaySummary, useEffectiveTargets, useLightDayFlag } from '../state/AppContext';
 import { MealCard } from '../components/MealCard';
 import { ProgressRing } from '../components/ProgressRing';
 import { MoonIcon } from '../components/icons';
+import { tomorrowKey as computeTomorrowKey } from '../lib/dates';
 
 function TodaySkeleton() {
   return (
@@ -19,14 +20,18 @@ function TodaySkeleton() {
 
 /** "How am I doing today?" — editorial hero figures, quick log CTA, meals. */
 export function Today() {
-  const { todayKey, settings, setTab, repeatMeal, removeMeal, setLightDay } = useApp();
+  const { todayKey, setTab, repeatMeal, removeMeal, removeMealItem, setLightDay } = useApp();
   const day = useDaySummary(todayKey);
+  const effective = useEffectiveTargets(todayKey);
 
-  if (!day) return <TodaySkeleton />;
+  const tomorrowKey = computeTomorrowKey();
+  const tomorrowLight = useLightDayFlag(tomorrowKey);
+
+  if (!day || !effective) return <TodaySkeleton />;
 
   const light = day.lightDay;
-  const proteinRem = Math.round(settings.proteinTarget_g - day.protein_g);
-  const calRem = Math.round(settings.calorieTarget_kcal - day.calories);
+  const proteinRem = Math.round(effective.proteinTarget - day.protein_g);
+  const calRem = Math.round(effective.calorieTarget - day.calories);
 
   const remaining = (rem: number, unit: string, hitText: string) =>
     rem > 0 ? (
@@ -43,7 +48,7 @@ export function Today() {
       <div className="mt-1">
         <ProgressRing
           value={day.protein_g}
-          target={settings.proteinTarget_g}
+          target={effective.proteinTarget}
           label="Protein"
           unit="g"
           tone="accent"
@@ -56,7 +61,7 @@ export function Today() {
       <div className="mt-6">
         <ProgressRing
           value={day.calories}
-          target={settings.calorieTarget_kcal}
+          target={effective.calorieTarget}
           label="Calories"
           unit="kcal"
           tone="cal"
@@ -94,11 +99,29 @@ export function Today() {
           <MoonIcon size={18} />
         </button>
       </div>
+
       {light && (
         <p className="serif mt-2.5 text-[13px] italic text-ink-faint">
           Light day — targets relaxed, no pressure.
         </p>
       )}
+      {!light && effective.compensatingFor > 0 && (
+        <p className="serif mt-2.5 text-[13px] italic text-ink-dim">
+          {effective.compensatingFor} light {effective.compensatingFor === 1 ? 'day' : 'days'} this
+          week — today's targets are up{' '}
+          <span className="num not-italic text-accent">+{effective.proteinBoost}g</span> protein /{' '}
+          <span className="num not-italic text-accent">+{effective.calorieBoost}</span> kcal to
+          compensate.
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setLightDay(tomorrowKey, !tomorrowLight)}
+        className="label-caps mt-3 text-[10px] tracking-[0.06em] text-ink-faint underline decoration-hairline underline-offset-2"
+      >
+        {tomorrowLight ? '☾ Tomorrow is marked light — tap to undo' : '+ Mark tomorrow as a light day'}
+      </button>
 
       <section className="mt-8">
         <div className="flex items-baseline justify-between border-b-[1.5px] border-edge pb-2">
@@ -118,6 +141,7 @@ export function Today() {
               meal={meal}
               onRepeat={repeatMeal}
               onDelete={(m) => removeMeal(m.id)}
+              onDeleteItem={removeMealItem}
             />
           ))
         )}

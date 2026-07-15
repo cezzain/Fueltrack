@@ -60,11 +60,15 @@ function DayRow({
   isToday,
   proteinTarget,
   onRepeat,
+  onDelete,
+  onDeleteItem,
 }: {
   day: DaySummary;
   isToday: boolean;
   proteinTarget: number;
   onRepeat: (meal: Meal) => void;
+  onDelete: (meal: Meal) => void;
+  onDeleteItem: (meal: Meal, itemId: string) => void;
 }) {
   const { settings } = useApp();
   const [expanded, setExpanded] = useState(isToday);
@@ -77,6 +81,7 @@ function DayRow({
         type="button"
         onClick={() => setExpanded((e) => !e)}
         aria-expanded={expanded}
+        data-testid="day-toggle"
         className="flex w-full items-baseline gap-3 py-4 text-left"
       >
         <div className="min-w-0 flex-1">
@@ -119,7 +124,15 @@ function DayRow({
           {day.meals.length === 0 ? (
             <p className="serif pb-2 text-[14px] italic text-ink-faint">Nothing logged yet today.</p>
           ) : (
-            day.meals.map((meal) => <MealCard key={meal.id} meal={meal} onRepeat={onRepeat} />)
+            day.meals.map((meal) => (
+              <MealCard
+                key={meal.id}
+                meal={meal}
+                onRepeat={onRepeat}
+                onDelete={onDelete}
+                onDeleteItem={onDeleteItem}
+              />
+            ))
           )}
         </div>
       )}
@@ -129,7 +142,7 @@ function DayRow({
 
 /** Past days, expandable to meals, with weekly averages. */
 export function History() {
-  const { repeatMeal, settings, todayKey } = useApp();
+  const { repeatMeal, removeMeal, removeMealItem, settings, todayKey } = useApp();
   // Keyed to todayKey so the window rolls forward at Dubai midnight even if
   // this screen stays mounted across the rollover.
   const keys = useMemo(() => lastNDateKeys(30), [todayKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -163,6 +176,8 @@ export function History() {
               isToday={day.dateKey === todayKey}
               proteinTarget={settings.proteinTarget_g}
               onRepeat={repeatMeal}
+              onDelete={(m) => removeMeal(m.id)}
+              onDeleteItem={removeMealItem}
             />
           ))
         )}
