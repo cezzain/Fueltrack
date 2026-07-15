@@ -8,6 +8,7 @@ import { dateTimeToEpoch, formatRelativeDayLabel, formatTime, lastNDateKeys, sug
 import { useOnline } from '../hooks/useOnline';
 import { compressImage, type CompressedImage } from '../lib/images';
 import { ConfirmationCard } from '../components/ConfirmationCard';
+import { ClockIcon } from '../components/icons';
 
 type Mode = 'photo' | 'describe' | 'manual';
 type Phase = 'input' | 'analyzing' | 'review';
@@ -48,6 +49,9 @@ export function Log() {
   // a past day (e.g. "log this for yesterday").
   const [logDateKey, setLogDateKey] = useState(todayKey);
   const [logTime, setLogTime] = useState(() => formatTime(Date.now()));
+  // The date/time controls stay collapsed behind a compact chip so the common
+  // "log it now" case isn't buried under a form; expand only to backfill.
+  const [whenOpen, setWhenOpen] = useState(false);
   const yesterdayKey = lastNDateKeys(2)[0];
   // Matches History's own 30-day window so a backfilled meal is never
   // logged somewhere the rest of the app can't show it.
@@ -99,6 +103,7 @@ export function Log() {
     setPhase('input');
     setLogDateKey(todayKey);
     setLogTime(formatTime(Date.now()));
+    setWhenOpen(false);
   };
 
   const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -227,7 +232,8 @@ export function Log() {
     </div>
   );
 
-  const whenPicker = (
+  const isBackfill = logDateKey !== todayKey;
+  const whenPicker = whenOpen ? (
     <div>
       <div className="flex flex-wrap items-center gap-1.5">
         {[
@@ -261,13 +267,34 @@ export function Log() {
           aria-label="Log time"
           className="num h-[34px] border-[1.5px] border-edge bg-bg px-2 text-[12px] text-ink outline-none focus:border-accent"
         />
+        <button
+          type="button"
+          onClick={() => setWhenOpen(false)}
+          className="label-caps ml-auto text-[10px] tracking-[0.06em] text-ink-faint underline decoration-hairline underline-offset-2"
+        >
+          Done
+        </button>
       </div>
-      {logDateKey !== todayKey && (
+      {isBackfill && (
         <p className="serif mt-1.5 text-[12px] italic text-ink-faint">
           Logging for {formatRelativeDayLabel(logDateKey)}
         </p>
       )}
     </div>
+  ) : (
+    <button
+      type="button"
+      onClick={() => setWhenOpen(true)}
+      className="flex items-center gap-2 text-[12px] text-ink-dim"
+    >
+      <ClockIcon size={13} />
+      <span className={`num ${isBackfill ? 'font-semibold text-accent' : ''}`}>
+        {isBackfill ? formatRelativeDayLabel(logDateKey) : 'Today'} · {logTime}
+      </span>
+      <span className="label-caps text-[9.5px] tracking-[0.06em] text-ink-faint underline decoration-hairline underline-offset-2">
+        change
+      </span>
+    </button>
   );
 
   const apiKeyCard = (
