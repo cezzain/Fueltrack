@@ -384,7 +384,7 @@ export function Settings() {
       </Section>
 
       <Section title="Profile">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <NumberField
             label="Height (cm)"
             value={settings.heightCm}
@@ -399,8 +399,17 @@ export function Settings() {
             max={200}
             onCommit={(weightKg) => updateSettings({ weightKg })}
           />
+          <NumberField
+            label="Age (yrs)"
+            value={settings.ageYears}
+            min={5}
+            max={120}
+            onCommit={(ageYears) => updateSettings({ ageYears })}
+          />
         </div>
-        <p className="mt-3 text-xs text-ink-faint">18 · basketball 6d/week · lean bulk</p>
+        <p className="mt-3 text-xs text-ink-faint">
+          <span className="num">{settings.ageYears}</span> · basketball 6d/week · lean bulk
+        </p>
       </Section>
 
       <SyncSection />

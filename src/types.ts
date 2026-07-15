@@ -140,6 +140,7 @@ export interface Settings {
   calorieTarget_kcal: number;
   heightCm: number;
   weightKg: number;
+  ageYears: number;
   /** Cross-device cloud sync on/off. */
   syncEnabled: boolean;
   /** Shared secret that names + guards this account's cloud store. */
@@ -154,6 +155,7 @@ export const DEFAULT_SETTINGS: Settings = {
   calorieTarget_kcal: 3000,
   heightCm: 185, // 6'1"
   weightKg: 61,
+  ageYears: 18,
   syncEnabled: false,
   syncCode: '',
 };

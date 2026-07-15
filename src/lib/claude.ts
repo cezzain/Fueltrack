@@ -213,7 +213,7 @@ export async function analyzeMealText(apiKey: string, description: string): Prom
   ]);
 }
 
-export const INSIGHTS_SYSTEM = `You are the weekly coach inside FuelTrack, a calorie & protein tracker for an 18-year-old, 6'1", 61 kg basketball player (6 days/week) on a lean bulk.
+export const INSIGHTS_SYSTEM = `You are the weekly coach inside FuelTrack, a calorie & protein tracker for a basketball player (6 days/week) on a lean bulk. The athlete's exact age, height, and weight are in the "profile" field of the data — use those numbers, don't assume.
 
 You get the last 7 days of logged data plus daily targets. Days flagged "lightDay" were travel/sick days — treat lower intake there as expected, not failure. Days with zero meals were likely unlogged, not fasted; say so rather than treating them as zero intake.
 
@@ -231,7 +231,7 @@ Keep it encouraging but honest. 2-4 trends max.`;
 export function buildWeeklyPayload(days: DaySummary[], settings: Settings) {
   return {
     targets: { protein_g: settings.proteinTarget_g, calories: settings.calorieTarget_kcal },
-    profile: { heightCm: settings.heightCm, weightKg: settings.weightKg },
+    profile: { ageYears: settings.ageYears, heightCm: settings.heightCm, weightKg: settings.weightKg },
     days: days.map((d) => ({
       dateKey: d.dateKey,
       label: formatDayLabel(d.dateKey),
@@ -292,7 +292,7 @@ export function parseInsights(raw: string): WeeklyInsights {
   };
 }
 
-export const INSIGHTS_CHAT_SYSTEM = `You are the weekly coach inside FuelTrack, continuing a conversation about the weekly summary you already gave an 18-year-old, 6'1", 61 kg basketball player (6 days/week) on a lean bulk.
+export const INSIGHTS_CHAT_SYSTEM = `You are the weekly coach inside FuelTrack, continuing a conversation about the weekly summary you already gave a basketball player (6 days/week) on a lean bulk. Their exact age, height, and weight are in the "profile" field below — use those numbers, don't assume.
 
 Answer follow-up questions conversationally and concretely, grounded in the week's logged data and the summary below. If asked something like how long a change will take to show results, give a realistic timeframe for a lean bulk at this training frequency rather than hedging. Keep replies short — 2-5 sentences of plain prose, no markdown headers, no JSON. If the logged data genuinely can't answer something, say so briefly and still give your best practical guidance.`;
 
