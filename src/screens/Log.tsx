@@ -4,7 +4,7 @@ import type { AnalysisResult, MealType } from '../types';
 import { activeApiKey, MEAL_TYPES } from '../types';
 import { useApp } from '../state/AppContext';
 import { AiError, analyzeMealPhoto, analyzeMealText } from '../lib/ai';
-import { suggestedMealType } from '../lib/dates';
+import { dateTimeToEpoch, formatRelativeDayLabel, formatTime, lastNDateKeys, suggestedMealType } from '../lib/dates';
 import { useOnline } from '../hooks/useOnline';
 import { compressImage, type CompressedImage } from '../lib/images';
 import { ConfirmationCard } from '../components/ConfirmationCard';
@@ -35,7 +35,7 @@ function toNonNegInt(v: string): number {
 
 /** AI logging flow: input → analyzing → review → saved. Never auto-logs. */
 export function Log() {
-  const { settings, logMeal, setTab } = useApp();
+  const { settings, todayKey, logMeal, setTab } = useApp();
   const hasKey = activeApiKey(settings).length > 0;
 
   const [mode, setMode] = useState<Mode>('photo');
@@ -43,6 +43,15 @@ export function Log() {
   const [error, setError] = useState<AiError | null>(null);
   const [saving, setSaving] = useState(false);
   const [mealType, setMealType] = useState<MealType>(() => suggestedMealType());
+
+  // Which day/time this meal logs to — defaults to now, editable to backfill
+  // a past day (e.g. "log this for yesterday").
+  const [logDateKey, setLogDateKey] = useState(todayKey);
+  const [logTime, setLogTime] = useState(() => formatTime(Date.now()));
+  const yesterdayKey = lastNDateKeys(2)[0];
+  // Matches History's own 30-day window so a backfilled meal is never
+  // logged somewhere the rest of the app can't show it.
+  const minLogDateKey = lastNDateKeys(30)[0];
 
   // Photo mode — the compressed photo survives analysis errors; it is only
   // cleared on explicit discard (✕) or a successful save.
@@ -88,6 +97,8 @@ export function Log() {
     setError(null);
     setSaving(false);
     setPhase('input');
+    setLogDateKey(todayKey);
+    setLogTime(formatTime(Date.now()));
   };
 
   const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -149,6 +160,8 @@ export function Log() {
         source: analysisSource,
         edited: result.edited,
         mealType,
+        dateKey: logDateKey,
+        loggedAt: dateTimeToEpoch(logDateKey, logTime),
         photoDataUrl: analysisSource === 'ai_photo' ? photo?.dataUrl : undefined,
       });
       resetAll();
@@ -181,6 +194,8 @@ export function Log() {
         source: 'manual',
         edited: false,
         mealType,
+        dateKey: logDateKey,
+        loggedAt: dateTimeToEpoch(logDateKey, logTime),
         // Never lose a photo: if one was taken before falling back to manual
         // entry, keep it attached to the meal.
         photoDataUrl: photo?.dataUrl,
@@ -209,6 +224,49 @@ export function Log() {
           {t}
         </button>
       ))}
+    </div>
+  );
+
+  const whenPicker = (
+    <div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {[
+          { key: todayKey, label: 'Today' },
+          { key: yesterdayKey, label: 'Yesterday' },
+        ].map((d) => (
+          <button
+            key={d.key}
+            type="button"
+            onClick={() => setLogDateKey(d.key)}
+            className={`h-[34px] border-[1.5px] border-edge px-3.5 text-[11px] font-semibold transition-colors ${
+              logDateKey === d.key ? 'bg-ink text-surface' : 'bg-transparent text-ink'
+            }`}
+          >
+            {d.label}
+          </button>
+        ))}
+        <input
+          type="date"
+          value={logDateKey}
+          max={todayKey}
+          min={minLogDateKey}
+          onChange={(e) => e.target.value && setLogDateKey(e.target.value)}
+          aria-label="Log date"
+          className="num h-[34px] border-[1.5px] border-edge bg-bg px-2 text-[12px] text-ink outline-none focus:border-accent"
+        />
+        <input
+          type="time"
+          value={logTime}
+          onChange={(e) => e.target.value && setLogTime(e.target.value)}
+          aria-label="Log time"
+          className="num h-[34px] border-[1.5px] border-edge bg-bg px-2 text-[12px] text-ink outline-none focus:border-accent"
+        />
+      </div>
+      {logDateKey !== todayKey && (
+        <p className="serif mt-1.5 text-[12px] italic text-ink-faint">
+          Logging for {formatRelativeDayLabel(logDateKey)}
+        </p>
+      )}
     </div>
   );
 
@@ -257,6 +315,7 @@ export function Log() {
               <p className="text-sm leading-relaxed text-ink">{error.message}</p>
             </div>
           )}
+          {whenPicker}
           {mealTypePicker}
           <ConfirmationCard
             key={analysisSeq}
@@ -318,6 +377,7 @@ export function Log() {
             ))}
           </div>
 
+          {whenPicker}
           {mealTypePicker}
 
           {!online && mode !== 'manual' && (

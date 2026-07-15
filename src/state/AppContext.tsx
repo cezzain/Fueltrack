@@ -26,7 +26,10 @@ interface AppContextValue {
   updateSettings: (patch: Partial<Settings>) => void;
   tab: Tab;
   setTab: (tab: Tab) => void;
-  /** Save a confirmed AI analysis (or manual entry) as a meal on today. */
+  /**
+   * Save a confirmed AI analysis (or manual entry) as a meal. Defaults to
+   * today at the current time; pass dateKey/loggedAt to backfill a past day.
+   */
   logMeal: (input: {
     name: string;
     analysis: AnalysisResult;
@@ -34,6 +37,8 @@ interface AppContextValue {
     edited: boolean;
     mealType?: MealType;
     photoDataUrl?: string;
+    dateKey?: string;
+    loggedAt?: number;
   }) => Promise<Meal>;
   /** One-tap re-log: copy a previous meal onto today, timestamped now. */
   repeatMeal: (meal: Meal) => Promise<Meal>;
@@ -95,6 +100,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       edited: boolean;
       mealType?: MealType;
       photoDataUrl?: string;
+      dateKey?: string;
+      loggedAt?: number;
     }): Promise<Meal> => {
       let photoId: string | undefined;
       if (input.photoDataUrl) {
@@ -103,9 +110,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       const meal: Meal = {
         id: newId(),
-        dateKey: computeTodayKey(),
+        dateKey: input.dateKey ?? computeTodayKey(),
         name: input.name,
-        loggedAt: Date.now(),
+        loggedAt: input.loggedAt ?? Date.now(),
         mealType: input.mealType,
         items: input.analysis.items.map((it) => ({
           id: newId(),

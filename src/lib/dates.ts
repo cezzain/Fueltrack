@@ -95,3 +95,12 @@ export function suggestedMealType(): 'breakfast' | 'lunch' | 'dinner' | 'snack' 
   if (hour >= 17 && hour < 23) return 'dinner';
   return 'snack';
 }
+
+/**
+ * Combine a Dubai-time date key ("YYYY-MM-DD") and a 24h "HH:mm" time into an
+ * epoch ms timestamp — for backfilling a meal onto a past day at a chosen time.
+ */
+export function dateTimeToEpoch(dateKey: string, hhmm: string): number {
+  const time = /^\d{2}:\d{2}$/.test(hhmm) ? hhmm : '12:00';
+  return Date.parse(`${dateKey}T${time}:00+04:00`);
+}
