@@ -1,13 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Routine } from '../types';
-import {
-  useApp,
-  useDaySummaries,
-  useRoutines,
-  useWeights,
-  useWorkouts,
-} from '../state/AppContext';
-import { formatDayLabel, formatRelativeDayLabel, monthGrid } from '../lib/dates';
+import { useApp, useRoutines, useWeights, useWorkouts } from '../state/AppContext';
+import { formatDayLabel } from '../lib/dates';
 
 function TrainSkeleton() {
   return (
@@ -19,7 +13,7 @@ function TrainSkeleton() {
   );
 }
 
-/** Train tab: routine-based workout tracker, month calendar, body-weight log. */
+/** Train tab: routine-based workout tracker + body-weight log. */
 export function Train() {
   const { todayKey } = useApp();
   const routines = useRoutines();
@@ -38,11 +32,10 @@ export function Train() {
         </header>
 
         <WorkoutTracker routines={routines} todayKey={todayKey} />
-        <WeightLog />
       </div>
 
-      <div className="mt-8 md:mt-0">
-        <MonthCalendar todayKey={todayKey} />
+      <div className="md:mt-[104px]">
+        <WeightLog />
       </div>
     </div>
   );
@@ -156,144 +149,6 @@ function WorkoutTracker({ routines, todayKey }: { routines: Routine[]; todayKey:
   );
 }
 
-// ---- month calendar ----
-
-function MonthCalendar({ todayKey }: { todayKey: string }) {
-  const [offset, setOffset] = useState(0);
-  const grid = useMemo(() => monthGrid(offset), [offset]);
-  const days = useDaySummaries(grid.dateKeys);
-  const workouts = useWorkouts(grid.dateKeys);
-  const [selected, setSelected] = useState<string | null>(null);
-
-  const byKey = useMemo(() => new Map((days ?? []).map((d) => [d.dateKey, d])), [days]);
-
-  const selectedDay = selected ? byKey.get(selected) : undefined;
-  const selectedWorkouts = selected ? (workouts?.get(selected) ?? []) : [];
-
-  return (
-    <section className="mt-8 md:mt-0">
-      <div className="flex items-baseline justify-between border-b-[1.5px] border-edge pb-2">
-        <h2 className="label-caps text-[12px] tracking-[0.14em] text-ink">Calendar</h2>
-        <div className="flex items-baseline gap-3">
-          <button
-            type="button"
-            aria-label="Previous month"
-            onClick={() => {
-              setOffset((o) => o - 1);
-              setSelected(null);
-            }}
-            className="num px-2 text-[15px] text-ink active:translate-y-px"
-          >
-            ←
-          </button>
-          <span className="serif text-[16px] text-ink">{grid.label}</span>
-          <button
-            type="button"
-            aria-label="Next month"
-            onClick={() => {
-              setOffset((o) => o + 1);
-              setSelected(null);
-            }}
-            disabled={offset >= 0}
-            className="num px-2 text-[15px] text-ink active:translate-y-px disabled:opacity-30"
-          >
-            →
-          </button>
-        </div>
-      </div>
-
-      <div className="label-caps mt-3 grid grid-cols-7 text-center text-[9px] tracking-[0.08em] text-ink-faint">
-        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-          <span key={i}>{d}</span>
-        ))}
-      </div>
-      <div className="mt-1 grid grid-cols-7 border-l border-t border-hairline">
-        {Array.from({ length: grid.leadingBlanks }, (_, i) => (
-          <div key={`b${i}`} className="aspect-square border-b border-r border-hairline bg-surface-2/50" />
-        ))}
-        {grid.dateKeys.map((key) => {
-          const day = byKey.get(key);
-          const ate = (day?.mealCount ?? 0) > 0;
-          const trained = (workouts?.get(key)?.length ?? 0) > 0;
-          const isToday = key === todayKey;
-          const isFuture = key > todayKey;
-          const isSelected = key === selected;
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setSelected(isSelected ? null : key)}
-              disabled={isFuture}
-              aria-label={`Details for ${formatDayLabel(key)}`}
-              className={`flex aspect-square flex-col items-center justify-center gap-1 border-b border-r border-hairline transition-colors ${
-                isSelected ? 'bg-ink text-surface' : isToday ? 'bg-surface' : ''
-              } ${isFuture ? 'opacity-30' : ''}`}
-            >
-              <span className={`num text-[12px] ${isToday && !isSelected ? 'font-bold text-accent' : ''}`}>
-                {Number(key.slice(-2))}
-              </span>
-              <span className="flex h-1.5 items-center gap-1">
-                {ate && <span className="h-1.5 w-1.5 bg-accent" aria-label="ate" />}
-                {trained && (
-                  <span
-                    className={`h-1.5 w-1.5 ${isSelected ? 'bg-surface' : 'bg-ink'}`}
-                    aria-label="worked out"
-                  />
-                )}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <p className="mt-2 flex items-center gap-4 text-[10.5px] text-ink-faint">
-        <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 bg-accent" /> ate
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 bg-ink" /> worked out
-        </span>
-      </p>
-
-      {selected && (
-        <div className="animate-rise mt-4 border-[1.5px] border-edge bg-surface p-4">
-          <div className="flex items-baseline justify-between">
-            <h3 className="serif text-[20px] text-ink">{formatRelativeDayLabel(selected)}</h3>
-            {selectedDay && selectedDay.mealCount > 0 && (
-              <span className="num text-[12px] text-ink-dim">
-                <span className="font-bold text-accent">{Math.round(selectedDay.protein_g)}g</span>{' '}
-                · {Math.round(selectedDay.calories)} kcal
-              </span>
-            )}
-          </div>
-          {selectedWorkouts.length > 0 && (
-            <p className="mt-2 text-[12.5px] text-ink-dim">
-              <span className="label-caps text-[9.5px] tracking-[0.08em] text-ink-faint">
-                Trained ·{' '}
-              </span>
-              {selectedWorkouts.map((w) => w.routineName).join(', ')}
-            </p>
-          )}
-          {selectedDay && selectedDay.meals.length > 0 ? (
-            <ul className="mt-2">
-              {selectedDay.meals.map((m) => (
-                <li key={m.id} className="flex items-baseline gap-2 border-b border-hairline py-1.5 text-[12.5px] last:border-b-0">
-                  <span className="min-w-0 flex-1 truncate text-ink">{m.name}</span>
-                  <span className="num shrink-0 font-semibold text-accent">{m.protein_g}g</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="serif mt-2 text-[13px] italic text-ink-faint">Nothing eaten was logged.</p>
-          )}
-          {selectedWorkouts.length === 0 && (
-            <p className="serif mt-1 text-[13px] italic text-ink-faint">No workout logged.</p>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
 // ---- body-weight log ----
 
 function WeightLog() {
@@ -312,7 +167,7 @@ function WeightLog() {
   const latest = recent[0];
 
   return (
-    <section className="mt-8">
+    <section className="mt-8 md:mt-0">
       <div className="flex items-baseline justify-between border-b-[1.5px] border-edge pb-2">
         <h2 className="label-caps text-[12px] tracking-[0.14em] text-ink">Body weight</h2>
         <span className="num text-[11px] text-ink-faint">

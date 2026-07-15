@@ -203,7 +203,7 @@ export function activeApiKey(settings: Settings): string {
   return (settings.provider === 'gemini' ? settings.geminiApiKey : settings.apiKey).trim();
 }
 
-export type Tab = 'today' | 'log' | 'train' | 'history' | 'insights' | 'settings';
+export type Tab = 'today' | 'log' | 'train' | 'calendar' | 'history' | 'insights' | 'settings';
 
 export function newId(): string {
   // crypto.randomUUID needs Safari 15.4+ and a secure context.
