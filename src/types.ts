@@ -51,8 +51,35 @@ export interface DayFlags {
   updatedAt?: number;
 }
 
+/** A reusable workout template the user defines once ("Leg day", "Shooting drills"). */
+export interface Routine {
+  id: string;
+  name: string;
+  /** Epoch ms of the last write — drives last-write-wins cross-device sync. */
+  updatedAt?: number;
+}
+
+/** One completed workout: "I did <routine> on <day>". */
+export interface Workout {
+  id: string;
+  /** YYYY-MM-DD in Asia/Dubai time — the day this workout counts toward. */
+  dateKey: string;
+  routineId: string;
+  /** Denormalized so history survives a routine rename/delete. */
+  routineName: string;
+  loggedAt: number;
+  updatedAt?: number;
+}
+
+/** One body-weight measurement (at most one per day — keyed by dateKey). */
+export interface WeightEntry {
+  dateKey: string;
+  weightKg: number;
+  updatedAt?: number;
+}
+
 /** Which store a record lived in, for a deletion tombstone. */
-export type TombstoneStore = 'meals' | 'days';
+export type TombstoneStore = 'meals' | 'days' | 'workouts' | 'routines' | 'weights';
 
 /**
  * Record of a deletion, so a delete on one device propagates to others
@@ -74,6 +101,10 @@ export interface SyncSnapshot {
   days: DayFlags[];
   insights: (CachedInsights & { id: string }) | null;
   tombstones: Tombstone[];
+  /** Optional so snapshots pushed before the Train tab existed still parse. */
+  workouts?: Workout[];
+  routines?: Routine[];
+  weights?: WeightEntry[];
   /** Synced settings (incl. API keys) + the epoch ms they last changed. */
   settings: Settings | null;
   settingsUpdatedAt: number;
@@ -172,7 +203,7 @@ export function activeApiKey(settings: Settings): string {
   return (settings.provider === 'gemini' ? settings.geminiApiKey : settings.apiKey).trim();
 }
 
-export type Tab = 'today' | 'log' | 'history' | 'insights' | 'settings';
+export type Tab = 'today' | 'log' | 'train' | 'history' | 'insights' | 'settings';
 
 export function newId(): string {
   // crypto.randomUUID needs Safari 15.4+ and a secure context.

@@ -9,7 +9,18 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AnalysisResult, DaySummary, Meal, MealSource, MealType, Settings, Tab } from '../types';
+import type {
+  AnalysisResult,
+  DaySummary,
+  Meal,
+  MealSource,
+  MealType,
+  Routine,
+  Settings,
+  Tab,
+  WeightEntry,
+  Workout,
+} from '../types';
 import { newId } from '../types';
 import * as db from '../lib/db';
 import { todayKey as computeTodayKey, weekDateKeys } from '../lib/dates';
@@ -51,6 +62,15 @@ interface AppContextValue {
   /** Remove one food item from a meal, recomputing its totals — deletes the whole meal if it was the last item. */
   removeMealItem: (meal: Meal, itemId: string) => Promise<void>;
   setLightDay: (dateKey: string, lightDay: boolean) => Promise<void>;
+  /** Create a reusable workout routine ("Leg day"). */
+  addRoutine: (name: string) => Promise<void>;
+  removeRoutine: (id: string) => Promise<void>;
+  /** Record "I did <routine>" on a day (defaults to today). */
+  logWorkout: (routine: Routine, dateKey?: string) => Promise<void>;
+  removeWorkout: (id: string) => Promise<void>;
+  /** Record a body-weight measurement for a day (defaults to today). */
+  logWeight: (weightKg: number, dateKey?: string) => Promise<void>;
+  removeWeight: (dateKey: string) => Promise<void>;
   /** Current cross-device sync state (off when disabled). */
   syncState: SyncState;
   /** Last sync error message, if the most recent attempt failed. */
@@ -312,6 +332,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const addRoutine = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      await db.putRoutine({ id: newId(), name: trimmed });
+      commit();
+    },
+    [commit],
+  );
+
+  const removeRoutine = useCallback(
+    async (id: string) => {
+      await db.deleteRoutine(id);
+      commit();
+    },
+    [commit],
+  );
+
+  const logWorkout = useCallback(
+    async (routine: Routine, dateKey?: string) => {
+      const workout: Workout = {
+        id: newId(),
+        dateKey: dateKey ?? computeTodayKey(),
+        routineId: routine.id,
+        routineName: routine.name,
+        loggedAt: Date.now(),
+      };
+      await db.putWorkout(workout);
+      commit();
+    },
+    [commit],
+  );
+
+  const removeWorkout = useCallback(
+    async (id: string) => {
+      await db.deleteWorkout(id);
+      commit();
+    },
+    [commit],
+  );
+
+  const logWeight = useCallback(
+    async (weightKg: number, dateKey?: string) => {
+      if (!Number.isFinite(weightKg) || weightKg <= 0) return;
+      await db.putWeight({ dateKey: dateKey ?? computeTodayKey(), weightKg });
+      // Keep the profile weight (used by AI coaching) in step with the log.
+      updateSettings({ weightKg });
+      commit();
+    },
+    [commit, updateSettings],
+  );
+
+  const removeWeight = useCallback(
+    async (dateKey: string) => {
+      await db.deleteWeight(dateKey);
+      commit();
+    },
+    [commit],
+  );
+
   const value = useMemo<AppContextValue>(
     () => ({
       ready,
@@ -327,6 +407,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeMeal,
       removeMealItem,
       setLightDay,
+      addRoutine,
+      removeRoutine,
+      logWorkout,
+      removeWorkout,
+      logWeight,
+      removeWeight,
       syncState,
       syncError,
       lastSyncedAt,
@@ -345,6 +431,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeMeal,
       removeMealItem,
       setLightDay,
+      addRoutine,
+      removeRoutine,
+      logWorkout,
+      removeWorkout,
+      logWeight,
+      removeWeight,
       syncState,
       syncError,
       lastSyncedAt,
@@ -434,6 +526,60 @@ export function useEffectiveTargets(dateKey: string): EffectiveTargets | null {
     };
   }, [dateKey, version, ready, settings]);
   return result;
+}
+
+/** Live list of custom workout routines, alphabetical. */
+export function useRoutines(): Routine[] | null {
+  const { version, ready } = useApp();
+  const [routines, setRoutines] = useState<Routine[] | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    db.getRoutines().then((r) => {
+      if (!cancelled) setRoutines(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [version, ready]);
+  return routines;
+}
+
+/** Live workouts per day for a list of date keys (calendar / day detail). */
+export function useWorkouts(dateKeys: string[]): Map<string, Workout[]> | null {
+  const { version, ready } = useApp();
+  const [map, setMap] = useState<Map<string, Workout[]> | null>(null);
+  const keysJoined = dateKeys.join(',');
+  const keysRef = useRef(dateKeys);
+  keysRef.current = dateKeys;
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    db.getWorkoutsInRange(keysRef.current).then((m) => {
+      if (!cancelled) setMap(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [keysJoined, version, ready]);
+  return map;
+}
+
+/** Live body-weight log, oldest-first. */
+export function useWeights(): WeightEntry[] | null {
+  const { version, ready } = useApp();
+  const [weights, setWeights] = useState<WeightEntry[] | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    db.getWeights().then((w) => {
+      if (!cancelled) setWeights(w);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [version, ready]);
+  return weights;
 }
 
 /** Load a stored photo's data URL by id. */

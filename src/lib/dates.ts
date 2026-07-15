@@ -111,6 +111,37 @@ export function tomorrowKey(): string {
 }
 
 /**
+ * Calendar-month grid data (Dubai time) for the month `offset` months away
+ * from the current one (0 = this month, -1 = last month …): a "July 2026"
+ * label, every date key in the month, and how many blank cells a Monday-first
+ * grid needs before day 1.
+ */
+export function monthGrid(offset: number): {
+  label: string;
+  dateKeys: string[];
+  leadingBlanks: number;
+} {
+  const [y, m] = todayKey().split('-').map(Number);
+  // Anchor at noon Dubai on the 1st, shifted by whole months.
+  const first = new Date(Date.UTC(y, m - 1 + offset, 1, 8)); // 12:00 GST = 08:00 UTC
+  const year = first.getUTCFullYear();
+  const month = first.getUTCMonth();
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateKeys = Array.from(
+    { length: daysInMonth },
+    (_, i) => `${year}-${pad(month + 1)}-${pad(i + 1)}`,
+  );
+  const label = new Intl.DateTimeFormat('en-GB', {
+    timeZone: APP_TZ,
+    month: 'long',
+    year: 'numeric',
+  }).format(first);
+  const leadingBlanks = (representativeDate(dateKeys[0]).getUTCDay() + 6) % 7; // Mon-first
+  return { label, dateKeys, leadingBlanks };
+}
+
+/**
  * Monday..Sunday date keys (Dubai time) for the calendar week containing
  * dateKey — used to spread a light day's shortfall across the rest of its week.
  */

@@ -4,6 +4,7 @@ import { useApp } from '../state/AppContext';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'log', label: 'Log' },
+  { id: 'train', label: 'Train' },
   { id: 'history', label: 'History' },
   { id: 'insights', label: 'Insights' },
   { id: 'settings', label: 'Settings' },

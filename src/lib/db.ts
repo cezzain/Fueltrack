@@ -1,5 +1,15 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { CachedInsights, DayFlags, DaySummary, Meal, Tombstone, TombstoneStore } from '../types';
+import type {
+  CachedInsights,
+  DayFlags,
+  DaySummary,
+  Meal,
+  Routine,
+  Tombstone,
+  TombstoneStore,
+  WeightEntry,
+  Workout,
+} from '../types';
 
 interface FuelTrackDB extends DBSchema {
   meals: {
@@ -27,13 +37,26 @@ interface FuelTrackDB extends DBSchema {
     key: string; // `${store}:${id}`
     value: Tombstone;
   };
+  workouts: {
+    key: string;
+    value: Workout;
+    indexes: { 'by-date': string };
+  };
+  routines: {
+    key: string;
+    value: Routine;
+  };
+  weights: {
+    key: string; // dateKey — one weigh-in per day
+    value: WeightEntry;
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<FuelTrackDB>> | null = null;
 
 function db(): Promise<IDBPDatabase<FuelTrackDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<FuelTrackDB>('fueltrack', 2, {
+    dbPromise = openDB<FuelTrackDB>('fueltrack', 3, {
       upgrade(database, oldVersion) {
         if (oldVersion < 1) {
           const meals = database.createObjectStore('meals', { keyPath: 'id' });
@@ -47,6 +70,13 @@ function db(): Promise<IDBPDatabase<FuelTrackDB>> {
           // Deletion tombstones, so removing a meal on one device removes it
           // everywhere instead of it re-syncing back from a stale peer.
           database.createObjectStore('tombstones', { keyPath: 'key' });
+        }
+        if (oldVersion < 3) {
+          // Train tab: completed workouts, reusable routines, body-weight log.
+          const workouts = database.createObjectStore('workouts', { keyPath: 'id' });
+          workouts.createIndex('by-date', 'dateKey');
+          database.createObjectStore('routines', { keyPath: 'id' });
+          database.createObjectStore('weights', { keyPath: 'dateKey' });
         }
       },
     });
@@ -126,6 +156,81 @@ function tombstoneKey(store: TombstoneStore, id: string): string {
 
 function makeTombstone(store: TombstoneStore, id: string): Tombstone {
   return { key: tombstoneKey(store, id), store, id, deletedAt: Date.now() };
+}
+
+// ---- workouts / routines / weights (Train tab) ----
+
+export async function getRoutines(): Promise<Routine[]> {
+  const rows = await (await db()).getAll('routines');
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function putRoutine(routine: Routine): Promise<void> {
+  const database = await db();
+  const stamped: Routine = { ...routine, updatedAt: routine.updatedAt ?? Date.now() };
+  const tx = database.transaction(['routines', 'tombstones'], 'readwrite');
+  void tx.objectStore('routines').put(stamped);
+  void tx.objectStore('tombstones').delete(tombstoneKey('routines', routine.id));
+  await tx.done;
+}
+
+export async function deleteRoutine(id: string): Promise<void> {
+  const database = await db();
+  const tx = database.transaction(['routines', 'tombstones'], 'readwrite');
+  void tx.objectStore('routines').delete(id);
+  void tx.objectStore('tombstones').put(makeTombstone('routines', id));
+  await tx.done;
+}
+
+export async function getWorkoutsInRange(dateKeys: string[]): Promise<Map<string, Workout[]>> {
+  const database = await db();
+  const result = new Map<string, Workout[]>();
+  await Promise.all(
+    dateKeys.map(async (key) => {
+      const rows = await database.getAllFromIndex('workouts', 'by-date', key);
+      result.set(key, rows.sort((a, b) => a.loggedAt - b.loggedAt));
+    }),
+  );
+  return result;
+}
+
+export async function putWorkout(workout: Workout): Promise<void> {
+  const database = await db();
+  const stamped: Workout = { ...workout, updatedAt: workout.updatedAt ?? Date.now() };
+  const tx = database.transaction(['workouts', 'tombstones'], 'readwrite');
+  void tx.objectStore('workouts').put(stamped);
+  void tx.objectStore('tombstones').delete(tombstoneKey('workouts', workout.id));
+  await tx.done;
+}
+
+export async function deleteWorkout(id: string): Promise<void> {
+  const database = await db();
+  const tx = database.transaction(['workouts', 'tombstones'], 'readwrite');
+  void tx.objectStore('workouts').delete(id);
+  void tx.objectStore('tombstones').put(makeTombstone('workouts', id));
+  await tx.done;
+}
+
+export async function getWeights(): Promise<WeightEntry[]> {
+  const rows = await (await db()).getAll('weights');
+  return rows.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+}
+
+export async function putWeight(entry: WeightEntry): Promise<void> {
+  const database = await db();
+  const stamped: WeightEntry = { ...entry, updatedAt: entry.updatedAt ?? Date.now() };
+  const tx = database.transaction(['weights', 'tombstones'], 'readwrite');
+  void tx.objectStore('weights').put(stamped);
+  void tx.objectStore('tombstones').delete(tombstoneKey('weights', entry.dateKey));
+  await tx.done;
+}
+
+export async function deleteWeight(dateKey: string): Promise<void> {
+  const database = await db();
+  const tx = database.transaction(['weights', 'tombstones'], 'readwrite');
+  void tx.objectStore('weights').delete(dateKey);
+  void tx.objectStore('tombstones').put(makeTombstone('weights', dateKey));
+  await tx.done;
 }
 
 // ---- photos ----
@@ -224,15 +329,21 @@ export async function getSyncableData(): Promise<{
   days: DayFlags[];
   insights: (CachedInsights & { id: string }) | null;
   tombstones: Tombstone[];
+  workouts: Workout[];
+  routines: Routine[];
+  weights: WeightEntry[];
 }> {
   const database = await db();
-  const [meals, days, insightsRows, tombstones] = await Promise.all([
+  const [meals, days, insightsRows, tombstones, workouts, routines, weights] = await Promise.all([
     database.getAll('meals'),
     database.getAll('days'),
     database.getAll('insights'),
     database.getAll('tombstones'),
+    database.getAll('workouts'),
+    database.getAll('routines'),
+    database.getAll('weights'),
   ]);
-  return { meals, days, insights: insightsRows[0] ?? null, tombstones };
+  return { meals, days, insights: insightsRows[0] ?? null, tombstones, workouts, routines, weights };
 }
 
 /**
@@ -246,10 +357,13 @@ export async function applyMergedData(merged: {
   days: DayFlags[];
   insights: (CachedInsights & { id: string }) | null;
   tombstones: Tombstone[];
+  workouts: Workout[];
+  routines: Routine[];
+  weights: WeightEntry[];
 }): Promise<void> {
   const database = await db();
   const tx = database.transaction(
-    ['meals', 'days', 'insights', 'photos', 'tombstones'],
+    ['meals', 'days', 'insights', 'photos', 'tombstones', 'workouts', 'routines', 'weights'],
     'readwrite',
   );
   const mealStore = tx.objectStore('meals');
@@ -267,6 +381,23 @@ export async function applyMergedData(merged: {
   for (const d of merged.days) void dayStore.put(d);
 
   if (merged.insights) void tx.objectStore('insights').put(merged.insights);
+
+  // Same replace pattern for the Train stores: anything not in the merged
+  // set was deleted (tombstoned) on some device — drop it here too.
+  const replaceStore = async <N extends 'workouts' | 'routines' | 'weights'>(
+    name: N,
+    rows: FuelTrackDB[N]['value'][],
+    keyOf: (r: FuelTrackDB[N]['value']) => string,
+  ) => {
+    const store = tx.objectStore(name);
+    const keep = new Set(rows.map(keyOf));
+    const existing = await store.getAllKeys();
+    for (const k of existing) if (!keep.has(k)) void store.delete(k);
+    for (const r of rows) void store.put(r as never);
+  };
+  await replaceStore('workouts', merged.workouts, (r) => r.id);
+  await replaceStore('routines', merged.routines, (r) => r.id);
+  await replaceStore('weights', merged.weights, (r) => r.dateKey);
 
   const tombStore = tx.objectStore('tombstones');
   for (const t of merged.tombstones) void tombStore.put(t);

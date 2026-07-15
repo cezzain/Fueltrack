@@ -3,6 +3,7 @@ import { TabBar } from './components/TabBar';
 import { TopNav } from './components/TopNav';
 import { Today } from './screens/Today';
 import { Log } from './screens/Log';
+import { Train } from './screens/Train';
 import { History } from './screens/History';
 import { Insights } from './screens/Insights';
 import { Settings } from './screens/Settings';
@@ -45,6 +46,9 @@ function Screens() {
         </div>
         <div hidden={tab !== 'log'}>
           <Log />
+        </div>
+        <div hidden={tab !== 'train'}>
+          <Train />
         </div>
         <div hidden={tab !== 'history'}>
           <History />

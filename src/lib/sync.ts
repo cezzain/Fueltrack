@@ -13,9 +13,12 @@ import type {
   CachedInsights,
   DayFlags,
   Meal,
+  Routine,
   Settings,
   SyncSnapshot,
   Tombstone,
+  WeightEntry,
+  Workout,
 } from '../types';
 import { DEVICE_LOCAL_SETTINGS } from '../types';
 import { applyMergedData, getSyncableData } from './db';
@@ -55,6 +58,29 @@ function mergeMeals(a: Meal[], b: Meal[], tombstones: Map<string, Tombstone>): M
   return out.sort((x, y) => x.loggedAt - y.loggedAt);
 }
 
+/** Generic per-record LWW merge with tombstone suppression, keyed by `keyOf`. */
+function mergeRecords<T extends { updatedAt?: number }>(
+  a: T[],
+  b: T[],
+  keyOf: (r: T) => string,
+  store: string,
+  tombstones: Map<string, Tombstone>,
+): T[] {
+  const byKey = new Map<string, T>();
+  for (const r of [...a, ...b]) {
+    const k = keyOf(r);
+    const prev = byKey.get(k);
+    if (!prev || ts(r.updatedAt) >= ts(prev.updatedAt)) byKey.set(k, r);
+  }
+  const out: T[] = [];
+  for (const r of byKey.values()) {
+    const tomb = tombstones.get(`${store}:${keyOf(r)}`);
+    if (tomb && tomb.deletedAt >= ts(r.updatedAt)) continue;
+    out.push(r);
+  }
+  return out;
+}
+
 function mergeDays(a: DayFlags[], b: DayFlags[]): DayFlags[] {
   const byKey = new Map<string, DayFlags>();
   for (const d of [...a, ...b]) {
@@ -92,6 +118,15 @@ export function mergeSnapshots(local: SyncSnapshot, remote: SyncSnapshot): SyncS
     days: mergeDays(local.days, remote.days),
     insights: mergeInsights(local.insights, remote.insights),
     tombstones,
+    workouts: mergeRecords<Workout>(
+      local.workouts ?? [], remote.workouts ?? [], (r) => r.id, 'workouts', tombMap,
+    ),
+    routines: mergeRecords<Routine>(
+      local.routines ?? [], remote.routines ?? [], (r) => r.id, 'routines', tombMap,
+    ),
+    weights: mergeRecords<WeightEntry>(
+      local.weights ?? [], remote.weights ?? [], (r) => r.dateKey, 'weights', tombMap,
+    ),
     settings,
     settingsUpdatedAt,
     pushedAt: now,
@@ -114,26 +149,33 @@ export async function buildSnapshot(
   settings: Settings,
   settingsUpdatedAt: number,
 ): Promise<SyncSnapshot> {
-  const { meals, days, insights, tombstones } = await getSyncableData();
+  const { meals, days, insights, tombstones, workouts, routines, weights } =
+    await getSyncableData();
   return {
     v: 1,
     meals,
     days,
     insights,
     tombstones,
+    workouts,
+    routines,
+    weights,
     settings: syncableSettings(settings),
     settingsUpdatedAt,
     pushedAt: Date.now(),
   };
 }
 
-/** Write a merged snapshot's meals/days/insights/tombstones back into IndexedDB. */
+/** Write a merged snapshot's records back into IndexedDB. */
 export async function applySnapshot(snapshot: SyncSnapshot): Promise<void> {
   await applyMergedData({
     meals: snapshot.meals,
     days: snapshot.days,
     insights: snapshot.insights,
     tombstones: snapshot.tombstones,
+    workouts: snapshot.workouts ?? [],
+    routines: snapshot.routines ?? [],
+    weights: snapshot.weights ?? [],
   });
 }
 
