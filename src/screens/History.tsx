@@ -153,9 +153,9 @@ export function History() {
   const visible = [...days].reverse().filter((d) => d.mealCount > 0 || d.dateKey === todayKey);
 
   return (
-    <div>
-      <header className="mt-5">
-        <h1 className="serif text-[40px] leading-none text-ink">History</h1>
+    <div className="md:max-w-[760px]">
+      <header className="mt-5 md:mt-0">
+        <h1 className="serif text-[40px] leading-none text-ink md:text-[56px]">History</h1>
         <p className="mt-2 text-[13px] text-ink-faint">Last 30 days</p>
       </header>
 

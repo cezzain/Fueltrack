@@ -298,9 +298,9 @@ export function Log() {
   );
 
   return (
-    <div className="space-y-4">
-      <header className="mt-5">
-        <h1 className="serif text-[40px] leading-none text-ink">Log a meal</h1>
+    <div className="space-y-4 md:max-w-[560px]">
+      <header className="mt-5 md:mt-0">
+        <h1 className="serif text-[40px] leading-none text-ink md:text-[56px]">Log a meal</h1>
         <p className="mt-2 text-[13px] text-ink-faint">
           {phase === 'review'
             ? 'Review the estimate — nothing saves until you confirm.'

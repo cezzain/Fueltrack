@@ -272,8 +272,8 @@ export function Settings() {
   const hasKey = activeKey.length > 0;
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="serif mt-5 text-[40px] leading-none text-ink">Settings</h1>
+    <div className="flex flex-col gap-6 md:max-w-[560px]">
+      <h1 className="serif mt-5 text-[40px] leading-none text-ink md:mt-0 md:text-[56px]">Settings</h1>
 
       <Section
         title="AI provider"

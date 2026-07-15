@@ -2,17 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type { CachedInsights, ChatMessage, DaySummary, Settings, WeeklyInsights } from '../types';
 import { activeApiKey } from '../types';
 import { useApp, useDaySummaries } from '../state/AppContext';
-import { APP_TZ, formatDayLabel, formatTime, lastNDateKeys } from '../lib/dates';
+import { formatDayLabel, formatTime, lastNDateKeys } from '../lib/dates';
 import { AiError, chatAboutInsights, generateWeeklyInsights } from '../lib/ai';
 import { useOnline } from '../hooks/useOnline';
 import { getCachedInsights, saveCachedInsights } from '../lib/db';
-
-const weekdayFmt = new Intl.DateTimeFormat('en-GB', { timeZone: APP_TZ, weekday: 'narrow' });
-
-/** "M" / "T" / … for a YYYY-MM-DD key, in Dubai time. */
-function weekdayInitial(dateKey: string): string {
-  return weekdayFmt.format(new Date(`${dateKey}T12:00:00+04:00`));
-}
+import { WeekChart } from '../components/WeekChart';
 
 /** Weekly AI summary: one call over the last 7 days, cached once per day. */
 export function Insights() {
@@ -163,8 +157,8 @@ export function Insights() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="mb-1 mt-5">
-        <h1 className="serif text-[40px] leading-none text-ink">Insights</h1>
+      <header className="mb-1 mt-5 md:mt-0">
+        <h1 className="serif text-[40px] leading-none text-ink md:text-[56px]">Insights</h1>
         <p className="mt-2 text-[13px] text-ink-faint">
           Your week, read by {settings.provider === 'gemini' ? 'Gemini' : 'Claude'}
         </p>
@@ -238,49 +232,57 @@ function InsightsBody({
         </div>
       )}
 
-      {days && <WeekChart days={days} target={target} todayKey={todayKey} />}
+      {/* On desktop the read splits into two columns: the week + narrative on
+          the left, the highlights + coaching + chat on the right. */}
+      <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:items-start md:gap-7">
+        <div className="flex flex-col gap-4">
+          {days && <WeekChart days={days} target={target} todayKey={todayKey} />}
 
-      {/* Summary as an editorial pull-quote */}
-      <section className="animate-rise border-l-4 border-accent py-1 pl-4">
-        <p className="serif text-[20px] italic leading-[1.35] text-ink">
-          &ldquo;{insights.summary}&rdquo;
-        </p>
-      </section>
+          {/* Summary as an editorial pull-quote */}
+          <section className="animate-rise border-l-4 border-accent py-1 pl-4">
+            <p className="serif text-[20px] italic leading-[1.35] text-ink md:text-[24px]">
+              &ldquo;{insights.summary}&rdquo;
+            </p>
+          </section>
 
-      {insights.trends.length > 0 && (
-        <section className="animate-rise border-[1.5px] border-edge bg-surface p-4">
-          <h2 className="label-caps text-[11px] tracking-[0.12em] text-ink">Trends</h2>
-          <ul className="mt-2 flex flex-col gap-2">
-            {insights.trends.map((trend, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span className="mt-[7px] h-1.5 w-1.5 shrink-0 bg-accent" />
-                <span className="text-sm leading-relaxed text-ink-dim">{trend}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+          {insights.trends.length > 0 && (
+            <section className="animate-rise border-[1.5px] border-edge bg-surface p-4">
+              <h2 className="label-caps text-[11px] tracking-[0.12em] text-ink">Trends</h2>
+              <ul className="mt-2 flex flex-col gap-2">
+                {insights.trends.map((trend, i) => (
+                  <li key={i} className="flex items-start gap-2.5">
+                    <span className="mt-[7px] h-1.5 w-1.5 shrink-0 bg-accent" />
+                    <span className="text-sm leading-relaxed text-ink-dim">{trend}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
 
-      <BestWorst insights={insights} />
+        <div className="flex flex-col gap-4">
+          <BestWorst insights={insights} />
 
-      {insights.suggestion && (
-        <section className="animate-rise border-[1.5px] border-edge bg-ink p-5 text-surface">
-          <h2 className="label-caps text-[10px] tracking-[0.12em] text-accent-on-dark">
-            One thing to try
-          </h2>
-          <p className="serif mt-2 text-[18px] leading-[1.4]">{insights.suggestion}</p>
-        </section>
-      )}
+          {insights.suggestion && (
+            <section className="animate-rise border-[1.5px] border-edge bg-ink p-5 text-surface">
+              <h2 className="label-caps text-[10px] tracking-[0.12em] text-accent-on-dark">
+                One thing to try
+              </h2>
+              <p className="serif mt-2 text-[18px] leading-[1.4]">{insights.suggestion}</p>
+            </section>
+          )}
 
-      {days && canRefresh && (
-        <InsightsChat
-          key={cached.generatedAt}
-          days={days}
-          settings={settings}
-          insights={insights}
-          online={online}
-        />
-      )}
+          {days && canRefresh && (
+            <InsightsChat
+              key={cached.generatedAt}
+              days={days}
+              settings={settings}
+              insights={insights}
+              online={online}
+            />
+          )}
+        </div>
+      </div>
     </>
   );
 }
@@ -417,53 +419,6 @@ function BestWorst({ insights }: { insights: WeeklyInsights }) {
         </div>
       )}
     </div>
-  );
-}
-
-// ---- 7-day mini chart ----
-
-function WeekChart({
-  days,
-  target,
-  todayKey,
-}: {
-  days: DaySummary[];
-  target: number;
-  todayKey: string;
-}) {
-  return (
-    <section className="animate-rise border-[1.5px] border-edge bg-surface p-4">
-      <div className="flex items-baseline justify-between">
-        <h2 className="label-caps text-[11px] tracking-[0.12em] text-ink">This week</h2>
-        <span className="text-[10px] text-ink-faint">
-          vs <span className="num">{target}g</span> target
-        </span>
-      </div>
-      <div className="mt-4 flex items-end justify-between px-1">
-        {days.map((day) => {
-          const pct = target > 0 ? Math.min(100, (day.protein_g / target) * 100) : 0;
-          const hit = target > 0 && day.protein_g >= target;
-          return (
-            <div key={day.dateKey} className="flex flex-col items-center gap-1.5">
-              <div className="flex h-3 items-center justify-center text-[9px] text-ink-faint">
-                {day.lightDay ? '☾' : ''}
-              </div>
-              <div className="flex h-[76px] w-[22px] items-end border border-edge" style={{ padding: 1.5 }}>
-                <div
-                  className={`w-full ${hit ? 'bg-accent' : 'bg-ink'}`}
-                  style={{ height: `${pct}%`, minHeight: day.protein_g > 0 ? '4px' : '0' }}
-                />
-              </div>
-              <span
-                className={`text-[10px] ${day.dateKey === todayKey ? 'font-bold text-ink' : 'text-ink-faint'}`}
-              >
-                {weekdayInitial(day.dateKey)}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 

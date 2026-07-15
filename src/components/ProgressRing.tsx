@@ -53,23 +53,27 @@ export function ProgressRing({
       aria-label={`${label}: ${Math.round(value)} of ${target} ${unit}`}
     >
       <div
-        className={`serif ${hero ? 'text-[76px] leading-[0.9]' : 'text-[42px] leading-[0.95] text-ink-mid'}`}
+        className={`serif ${
+          hero
+            ? 'text-[76px] leading-[0.9] md:text-[104px] lg:text-[140px]'
+            : 'text-[42px] leading-[0.95] text-ink-mid md:text-[52px]'
+        }`}
         style={{ letterSpacing: hero ? '-0.03em' : '-0.02em' }}
       >
         <span className="num">{Math.round(value)}</span>
-        <span className={hero ? 'text-[32px]' : 'text-[20px]'}>
+        <span className={hero ? 'text-[32px] md:text-[44px] lg:text-[52px]' : 'text-[20px] md:text-[24px]'}>
           {unit === 'kcal' ? ' kcal' : unit}
         </span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
-        <span className="label-caps text-[12px] tracking-[0.1em] text-ink">{label}</span>
-        <span className={`text-[13px] ${lightDay ? 'text-ink-faint' : 'text-ink-dim'}`}>
+        <span className="label-caps text-[12px] tracking-[0.1em] text-ink md:text-[14px]">{label}</span>
+        <span className={`text-[13px] md:text-[14px] ${lightDay ? 'text-ink-faint' : 'text-ink-dim'}`}>
           of <span className="num">{target.toLocaleString('en-US')}</span>
           {unit === 'kcal' ? ' kcal' : unit}
         </span>
       </div>
       <div
-        className={`mt-3 border-[1.5px] border-edge ${hero ? 'h-3.5' : 'h-2.5'}`}
+        className={`mt-3 border-[1.5px] border-edge ${hero ? 'h-3.5 md:h-[18px]' : 'h-2.5 md:h-3'}`}
         style={{ padding: 2 }}
       >
         <div

@@ -16,7 +16,7 @@ const TABS: { id: Tab; label: string }[] = [
 export function TabBar() {
   const { tab, setTab } = useApp();
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t-[1.5px] border-edge bg-surface safe-bottom">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t-[1.5px] border-edge bg-surface safe-bottom md:hidden">
       <div className="mx-auto flex max-w-md">
         {TABS.map((t, i) => {
           const active = tab === t.id;
