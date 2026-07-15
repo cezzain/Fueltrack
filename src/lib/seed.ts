@@ -1,5 +1,4 @@
 import type { FoodItem, Meal, MealType } from '../types';
-import { newId } from '../types';
 import { seedOnce } from './db';
 
 /** Epoch ms for a Dubai-local wall-clock time (GST is fixed UTC+4, no DST). */
@@ -7,29 +6,38 @@ function dubai(dateKey: string, time: string): number {
   return Date.parse(`${dateKey}T${time}:00+04:00`);
 }
 
-function item(name: string, portion: string, protein_g: number, calories: number): FoodItem {
-  return { id: newId(), name, portion, protein_g, calories, confidence: 'medium' };
+// Seed records use STABLE ids (not random) so that if two devices each seed
+// their own demo data before syncing, the identical ids dedupe on merge
+// instead of showing doubled demo meals.
+function item(
+  id: string,
+  name: string,
+  portion: string,
+  protein_g: number,
+  calories: number,
+): FoodItem {
+  return { id, name, portion, protein_g, calories, confidence: 'medium' };
 }
 
-function udonBowlItems(): FoodItem[] {
+function udonBowlItems(prefix: string): FoodItem[] {
   return [
-    item('Shaved beef', '~250g cooked', 62, 700),
-    item('Fried tofu', '4 pieces', 12, 220),
-    item('Udon noodles', '1 serving', 7, 250),
-    item('Mushrooms + bok choy', '1 cup', 3, 40),
+    item(`${prefix}-beef`, 'Shaved beef', '~250g cooked', 62, 700),
+    item(`${prefix}-tofu`, 'Fried tofu', '4 pieces', 12, 220),
+    item(`${prefix}-udon`, 'Udon noodles', '1 serving', 7, 250),
+    item(`${prefix}-veg`, 'Mushrooms + bok choy', '1 cup', 3, 40),
     // 9g so the items sum to the meal's 93g total (250ml milk is 8-9g).
-    item('Glass of milk', '250 ml', 9, 115),
+    item(`${prefix}-milk`, 'Glass of milk', '250 ml', 9, 115),
   ];
 }
 
-function omelette(dateKey: string, time: string): Meal {
+function omelette(id: string, dateKey: string, time: string): Meal {
   return {
-    id: newId(),
+    id,
     dateKey,
     name: 'Omelette (3 eggs, cheese, veggies)',
     loggedAt: dubai(dateKey, time),
     mealType: 'breakfast',
-    items: [item('Omelette', '3 eggs, cheese, veggies, oil', 26, 475)],
+    items: [item(`${id}-omelette`, 'Omelette', '3 eggs, cheese, veggies, oil', 26, 475)],
     protein_g: 26,
     calories: 475,
     source: 'ai_text',
@@ -38,14 +46,14 @@ function omelette(dateKey: string, time: string): Meal {
   };
 }
 
-function udonBowl(dateKey: string, time: string, mealType: MealType): Meal {
+function udonBowl(id: string, dateKey: string, time: string, mealType: MealType): Meal {
   return {
-    id: newId(),
+    id,
     dateKey,
     name: 'Beef & tofu udon bowl + milk',
     loggedAt: dubai(dateKey, time),
     mealType,
-    items: udonBowlItems(),
+    items: udonBowlItems(id),
     protein_g: 93,
     calories: 1325,
     source: 'ai_text',
@@ -67,10 +75,10 @@ export async function seedIfNeeded(): Promise<boolean> {
   return seedOnce(
     'seeded.v1',
     [
-      omelette(monday, '08:45'),
-      udonBowl(monday, '13:10', 'lunch'),
-      udonBowl(monday, '19:40', 'dinner'),
-      omelette(tuesday, '08:20'),
+      omelette('seed-mon-breakfast', monday, '08:45'),
+      udonBowl('seed-mon-lunch', monday, '13:10', 'lunch'),
+      udonBowl('seed-mon-dinner', monday, '19:40', 'dinner'),
+      omelette('seed-tue-breakfast', tuesday, '08:20'),
     ],
     [{ dateKey: tuesday, lightDay: true }], // travel / airport day
   );

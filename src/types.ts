@@ -39,12 +39,46 @@ export interface Meal {
   aiNotes?: string;
   /** Key into the photos store (compressed JPEG data URL). */
   photoId?: string;
+  /** Epoch ms of the last write — drives last-write-wins cross-device sync. */
+  updatedAt?: number;
 }
 
 export interface DayFlags {
   dateKey: string;
   /** Travel/sick day: soften target messaging instead of showing failure. */
   lightDay: boolean;
+  /** Epoch ms of the last write — drives last-write-wins cross-device sync. */
+  updatedAt?: number;
+}
+
+/** Which store a record lived in, for a deletion tombstone. */
+export type TombstoneStore = 'meals' | 'days';
+
+/**
+ * Record of a deletion, so a delete on one device propagates to others
+ * instead of the record resurfacing on the next merge.
+ */
+export interface Tombstone {
+  /** Store + record id: `${store}:${id}`. */
+  key: string;
+  store: TombstoneStore;
+  id: string;
+  /** Epoch ms of the deletion. */
+  deletedAt: number;
+}
+
+/** Everything that travels between devices (photos deliberately excluded). */
+export interface SyncSnapshot {
+  v: 1;
+  meals: Meal[];
+  days: DayFlags[];
+  insights: (CachedInsights & { id: string }) | null;
+  tombstones: Tombstone[];
+  /** Synced settings (incl. API keys) + the epoch ms they last changed. */
+  settings: Settings | null;
+  settingsUpdatedAt: number;
+  /** Epoch ms this snapshot was pushed. */
+  pushedAt: number;
 }
 
 export interface DaySummary {
@@ -106,6 +140,10 @@ export interface Settings {
   calorieTarget_kcal: number;
   heightCm: number;
   weightKg: number;
+  /** Cross-device cloud sync on/off. */
+  syncEnabled: boolean;
+  /** Shared secret that names + guards this account's cloud store. */
+  syncCode: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -116,7 +154,16 @@ export const DEFAULT_SETTINGS: Settings = {
   calorieTarget_kcal: 3000,
   heightCm: 185, // 6'1"
   weightKg: 61,
+  syncEnabled: false,
+  syncCode: '',
 };
+
+/**
+ * Settings fields that must NOT travel between devices — either device-local
+ * (the sync toggle) or already-known to both sides (the sync code itself).
+ * Everything else, including API keys and targets, syncs.
+ */
+export const DEVICE_LOCAL_SETTINGS: (keyof Settings)[] = ['syncEnabled', 'syncCode'];
 
 /** The key for the currently selected AI provider. */
 export function activeApiKey(settings: Settings): string {

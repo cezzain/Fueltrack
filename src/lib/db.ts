@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { CachedInsights, DayFlags, DaySummary, Meal } from '../types';
+import type { CachedInsights, DayFlags, DaySummary, Meal, Tombstone, TombstoneStore } from '../types';
 
 interface FuelTrackDB extends DBSchema {
   meals: {
@@ -23,20 +23,31 @@ interface FuelTrackDB extends DBSchema {
     key: string;
     value: { key: string; value: unknown };
   };
+  tombstones: {
+    key: string; // `${store}:${id}`
+    value: Tombstone;
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<FuelTrackDB>> | null = null;
 
 function db(): Promise<IDBPDatabase<FuelTrackDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<FuelTrackDB>('fueltrack', 1, {
-      upgrade(database) {
-        const meals = database.createObjectStore('meals', { keyPath: 'id' });
-        meals.createIndex('by-date', 'dateKey');
-        database.createObjectStore('days', { keyPath: 'dateKey' });
-        database.createObjectStore('photos', { keyPath: 'id' });
-        database.createObjectStore('insights', { keyPath: 'id' });
-        database.createObjectStore('meta', { keyPath: 'key' });
+    dbPromise = openDB<FuelTrackDB>('fueltrack', 2, {
+      upgrade(database, oldVersion) {
+        if (oldVersion < 1) {
+          const meals = database.createObjectStore('meals', { keyPath: 'id' });
+          meals.createIndex('by-date', 'dateKey');
+          database.createObjectStore('days', { keyPath: 'dateKey' });
+          database.createObjectStore('photos', { keyPath: 'id' });
+          database.createObjectStore('insights', { keyPath: 'id' });
+          database.createObjectStore('meta', { keyPath: 'key' });
+        }
+        if (oldVersion < 2) {
+          // Deletion tombstones, so removing a meal on one device removes it
+          // everywhere instead of it re-syncing back from a stale peer.
+          database.createObjectStore('tombstones', { keyPath: 'key' });
+        }
       },
     });
     // Don't memoize a rejection: iOS WebKit can transiently drop the IDB
@@ -68,14 +79,23 @@ export async function getMealsInRange(dateKeys: string[]): Promise<Map<string, M
 }
 
 export async function putMeal(meal: Meal): Promise<void> {
-  await (await db()).put('meals', meal);
+  const database = await db();
+  const stamped: Meal = { ...meal, updatedAt: meal.updatedAt ?? Date.now() };
+  const tx = database.transaction(['meals', 'tombstones'], 'readwrite');
+  void tx.objectStore('meals').put(stamped);
+  // A re-created/edited meal must not stay tombstoned from a prior delete.
+  void tx.objectStore('tombstones').delete(tombstoneKey('meals', meal.id));
+  await tx.done;
 }
 
 export async function deleteMeal(id: string): Promise<void> {
   const database = await db();
   const meal = await database.get('meals', id);
-  await database.delete('meals', id);
-  if (meal?.photoId) await database.delete('photos', meal.photoId);
+  const tx = database.transaction(['meals', 'photos', 'tombstones'], 'readwrite');
+  void tx.objectStore('meals').delete(id);
+  if (meal?.photoId) void tx.objectStore('photos').delete(meal.photoId);
+  void tx.objectStore('tombstones').put(makeTombstone('meals', id));
+  await tx.done;
 }
 
 // ---- day flags ----
@@ -95,7 +115,17 @@ export async function getLightDayFlags(dateKeys: string[]): Promise<Map<string, 
 }
 
 export async function setLightDay(dateKey: string, lightDay: boolean): Promise<void> {
-  await (await db()).put('days', { dateKey, lightDay });
+  await (await db()).put('days', { dateKey, lightDay, updatedAt: Date.now() });
+}
+
+// ---- tombstones (deletion records for sync) ----
+
+function tombstoneKey(store: TombstoneStore, id: string): string {
+  return `${store}:${id}`;
+}
+
+function makeTombstone(store: TombstoneStore, id: string): Tombstone {
+  return { key: tombstoneKey(store, id), store, id, deletedAt: Date.now() };
 }
 
 // ---- photos ----
@@ -184,6 +214,64 @@ function summarize(dateKey: string, meals: Meal[], lightDay: boolean): DaySummar
     protein_g: Math.round(meals.reduce((sum, m) => sum + m.protein_g, 0)),
     calories: Math.round(meals.reduce((sum, m) => sum + m.calories, 0)),
   };
+}
+
+// ---- sync: bulk read + apply ----
+
+/** Raw local records the sync engine needs to build a snapshot. */
+export async function getSyncableData(): Promise<{
+  meals: Meal[];
+  days: DayFlags[];
+  insights: (CachedInsights & { id: string }) | null;
+  tombstones: Tombstone[];
+}> {
+  const database = await db();
+  const [meals, days, insightsRows, tombstones] = await Promise.all([
+    database.getAll('meals'),
+    database.getAll('days'),
+    database.getAll('insights'),
+    database.getAll('tombstones'),
+  ]);
+  return { meals, days, insights: insightsRows[0] ?? null, tombstones };
+}
+
+/**
+ * Replace local meals/days/insights/tombstones with an already-merged set.
+ * Meals present locally but absent from the merged set (i.e. tombstoned) are
+ * removed along with their photos. Runs in one transaction so a mid-apply
+ * failure can't leave the store half-updated.
+ */
+export async function applyMergedData(merged: {
+  meals: Meal[];
+  days: DayFlags[];
+  insights: (CachedInsights & { id: string }) | null;
+  tombstones: Tombstone[];
+}): Promise<void> {
+  const database = await db();
+  const tx = database.transaction(
+    ['meals', 'days', 'insights', 'photos', 'tombstones'],
+    'readwrite',
+  );
+  const mealStore = tx.objectStore('meals');
+  const keepMealIds = new Set(merged.meals.map((m) => m.id));
+  const existingMeals = await mealStore.getAll();
+  for (const m of existingMeals) {
+    if (!keepMealIds.has(m.id)) {
+      void mealStore.delete(m.id);
+      if (m.photoId) void tx.objectStore('photos').delete(m.photoId);
+    }
+  }
+  for (const m of merged.meals) void mealStore.put(m);
+
+  const dayStore = tx.objectStore('days');
+  for (const d of merged.days) void dayStore.put(d);
+
+  if (merged.insights) void tx.objectStore('insights').put(merged.insights);
+
+  const tombStore = tx.objectStore('tombstones');
+  for (const t of merged.tombstones) void tombStore.put(t);
+
+  await tx.done;
 }
 
 /** Export everything (except photos, which would bloat the file) as a JSON blob. */

@@ -14,8 +14,11 @@ import { newId } from '../types';
 import * as db from '../lib/db';
 import { todayKey as computeTodayKey, weekDateKeys } from '../lib/dates';
 import { computeEffectiveTargets, type EffectiveTargets } from '../lib/targets';
-import { loadSettings, saveSettings } from '../lib/settings';
+import { loadSettings, loadSettingsUpdatedAt, saveSettings } from '../lib/settings';
+import { syncNow as runSync, SyncError } from '../lib/sync';
 import { seedIfNeeded } from '../lib/seed';
+
+export type SyncState = 'off' | 'idle' | 'syncing' | 'ok' | 'error';
 
 interface AppContextValue {
   ready: boolean;
@@ -48,6 +51,14 @@ interface AppContextValue {
   /** Remove one food item from a meal, recomputing its totals — deletes the whole meal if it was the last item. */
   removeMealItem: (meal: Meal, itemId: string) => Promise<void>;
   setLightDay: (dateKey: string, lightDay: boolean) => Promise<void>;
+  /** Current cross-device sync state (off when disabled). */
+  syncState: SyncState;
+  /** Last sync error message, if the most recent attempt failed. */
+  syncError: string | null;
+  /** Epoch ms of the last successful sync, or null. */
+  lastSyncedAt: number | null;
+  /** Run a full sync round-trip now (pull → merge → push). */
+  syncNow: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -61,17 +72,103 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
+  // ---- cross-device sync ----
+  const [syncState, setSyncState] = useState<SyncState>(
+    settings.syncEnabled ? 'idle' : 'off',
+  );
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const settingsUpdatedAtRef = useRef(loadSettingsUpdatedAt());
+  const syncingRef = useRef(false);
+  const syncTimerRef = useRef<number | undefined>(undefined);
+  const readyRef = useRef(false);
+
+  const doSync = useCallback(async () => {
+    const s = settingsRef.current;
+    if (!s.syncEnabled || !s.syncCode.trim() || !readyRef.current) return;
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    setSyncState('syncing');
+    setSyncError(null);
+    try {
+      const result = await runSync(s, settingsUpdatedAtRef.current);
+      // Adopt remote settings only if they're strictly newer than ours, and
+      // always keep this device's local sync toggle + code.
+      if (result.settings && result.settingsUpdatedAt > settingsUpdatedAtRef.current) {
+        const applied: Settings = {
+          ...result.settings,
+          syncEnabled: s.syncEnabled,
+          syncCode: s.syncCode,
+        };
+        settingsUpdatedAtRef.current = result.settingsUpdatedAt;
+        saveSettings(applied, result.settingsUpdatedAt);
+        setSettings(applied);
+      }
+      setLastSyncedAt(Date.now());
+      setSyncState('ok');
+      bump(); // surface merged-in meals/days to the hooks
+    } catch (err) {
+      setSyncError(err instanceof SyncError ? err.message : 'Sync failed — try again.');
+      setSyncState('error');
+    } finally {
+      syncingRef.current = false;
+    }
+  }, [bump]);
+
+  /** Debounced push after local edits, so rapid changes coalesce into one sync. */
+  const scheduleSync = useCallback(() => {
+    if (!settingsRef.current.syncEnabled) return;
+    window.clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = window.setTimeout(() => void doSync(), 3000);
+  }, [doSync]);
+
+  /** Bump the version AND schedule a sync — used by every data mutation. */
+  const commit = useCallback(() => {
+    bump();
+    scheduleSync();
+  }, [bump, scheduleSync]);
+
   useEffect(() => {
     let cancelled = false;
     seedIfNeeded()
       .catch(() => {})
       .finally(() => {
-        if (!cancelled) setReady(true);
+        if (!cancelled) {
+          readyRef.current = true;
+          setReady(true);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // Sync lifecycle: run once when it turns on / the app is ready, then on a
+  // timer and whenever the app regains focus (covers the common "logged on my
+  // phone, now opening the iPad" case). Re-subscribes if the code changes.
+  useEffect(() => {
+    if (!ready) return;
+    if (!settings.syncEnabled || !settings.syncCode.trim()) {
+      setSyncState('off');
+      return;
+    }
+    setSyncState((s) => (s === 'off' ? 'idle' : s));
+    void doSync();
+    const interval = setInterval(() => void doSync(), 60_000);
+    const onFocus = () => void doSync();
+    const onVisible = () => {
+      if (!document.hidden) void doSync();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [ready, settings.syncEnabled, settings.syncCode, doSync]);
 
   // Day rollover at Dubai midnight: re-check on an interval and when the app
   // returns to the foreground (iOS suspends timers while backgrounded).
@@ -87,13 +184,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const updateSettings = useCallback((patch: Partial<Settings>) => {
-    setSettings((prev) => {
-      const next = { ...prev, ...patch };
-      saveSettings(next);
-      return next;
-    });
-  }, []);
+  const updateSettings = useCallback(
+    (patch: Partial<Settings>) => {
+      const now = Date.now();
+      settingsUpdatedAtRef.current = now;
+      setSettings((prev) => {
+        const next = { ...prev, ...patch };
+        saveSettings(next, now);
+        return next;
+      });
+      scheduleSync();
+    },
+    [scheduleSync],
+  );
 
   const logMeal = useCallback(
     async (input: {
@@ -140,10 +243,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (photoId) await db.deletePhoto(photoId).catch(() => {});
         throw err;
       }
-      bump();
+      commit();
       return meal;
     },
-    [bump],
+    [commit],
   );
 
   const repeatMeal = useCallback(
@@ -159,26 +262,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         photoId: undefined,
       };
       await db.putMeal(copy);
-      bump();
+      commit();
       return copy;
     },
-    [bump],
+    [commit],
   );
 
   const updateMeal = useCallback(
     async (meal: Meal) => {
       await db.putMeal(meal);
-      bump();
+      commit();
     },
-    [bump],
+    [commit],
   );
 
   const removeMeal = useCallback(
     async (id: string) => {
       await db.deleteMeal(id);
-      bump();
+      commit();
     },
-    [bump],
+    [commit],
   );
 
   const removeMealItem = useCallback(
@@ -196,17 +299,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
         await db.putMeal(updated);
       }
-      bump();
+      commit();
     },
-    [bump],
+    [commit],
   );
 
   const setLightDay = useCallback(
     async (dateKey: string, lightDay: boolean) => {
       await db.setLightDay(dateKey, lightDay);
-      bump();
+      commit();
     },
-    [bump],
+    [commit],
   );
 
   const value = useMemo<AppContextValue>(
@@ -224,6 +327,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeMeal,
       removeMealItem,
       setLightDay,
+      syncState,
+      syncError,
+      lastSyncedAt,
+      syncNow: doSync,
     }),
     [
       ready,
@@ -238,6 +345,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeMeal,
       removeMealItem,
       setLightDay,
+      syncState,
+      syncError,
+      lastSyncedAt,
+      doSync,
     ],
   );
 

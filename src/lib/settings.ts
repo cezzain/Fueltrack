@@ -1,6 +1,7 @@
 import { DEFAULT_SETTINGS, type Settings } from '../types';
 
 const KEY = 'fueltrack.settings.v1';
+const UPDATED_KEY = 'fueltrack.settings.updatedAt.v1';
 
 export function loadSettings(): Settings {
   try {
@@ -13,6 +14,19 @@ export function loadSettings(): Settings {
   }
 }
 
-export function saveSettings(settings: Settings): void {
+/** Epoch ms the settings last changed — drives last-write-wins across devices. */
+export function loadSettingsUpdatedAt(): number {
+  const raw = localStorage.getItem(UPDATED_KEY);
+  const n = raw ? Number(raw) : 0;
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Persist settings and their change time. Pass `updatedAt` when applying a
+ * synced-in copy (so the remote's timestamp is preserved); omit it for a local
+ * edit to stamp "now".
+ */
+export function saveSettings(settings: Settings, updatedAt: number = Date.now()): void {
   localStorage.setItem(KEY, JSON.stringify(settings));
+  localStorage.setItem(UPDATED_KEY, String(updatedAt));
 }
