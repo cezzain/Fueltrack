@@ -176,6 +176,8 @@ export interface Settings {
   authToken: string;
   /** Email of the signed-in account, for display. */
   authEmail: string;
+  /** True once a Google account is linked (shown in Settings; synced). */
+  linkedGoogle: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -189,6 +191,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ageYears: 18,
   authToken: '',
   authEmail: '',
+  linkedGoogle: false,
 };
 
 /**

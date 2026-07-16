@@ -5,6 +5,8 @@ import { activeModelLabel } from '../lib/ai';
 import { exportAllData } from '../lib/db';
 import { formatTime, todayKey } from '../lib/dates';
 import { AccountAuthForm } from '../components/AccountAuth';
+import { AuthError, fetchAuthConfig, linkGoogle } from '../lib/auth';
+import { renderGoogleButton } from '../lib/google';
 
 function Section({ title, chip, children }: { title: string; chip?: ReactNode; children: ReactNode }) {
   return (
@@ -95,6 +97,52 @@ function EyeIcon({ off }: { off: boolean }) {
   );
 }
 
+/** Renders Google's button (when configured) to link Google to this account. */
+function LinkGoogle() {
+  const { settings, updateSettings } = useApp();
+  const ref = useRef<HTMLDivElement>(null);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAuthConfig().then((cfg) => {
+      if (cancelled || !cfg.googleClientId || !ref.current) return;
+      renderGoogleButton(ref.current, cfg.googleClientId, (idToken) => {
+        void (async () => {
+          setError(null);
+          try {
+            await linkGoogle(idToken, settings.authToken);
+            updateSettings({ linkedGoogle: true });
+          } catch (err) {
+            setError(err instanceof AuthError ? err.message : 'Linking failed — try again.');
+          }
+        })();
+      })
+        .then(() => {
+          if (!cancelled) setReady(true);
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="mt-3">
+      {ready && (
+        <p className="mb-2 text-xs text-ink-dim">
+          Link Google to sign in with one tap next time:
+        </p>
+      )}
+      <div ref={ref} />
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
 function AccountSection() {
   const { settings, updateSettings, syncState, syncError, lastSyncedAt, syncNow } = useApp();
   const signedIn = settings.authToken.trim().length > 0;
@@ -144,6 +192,14 @@ function AccountSection() {
             </button>
           </div>
           <p className="mt-2.5 text-xs leading-relaxed">{status}</p>
+          {settings.linkedGoogle ? (
+            <p className="mt-2 text-xs text-ink-faint">
+              <span className="text-accent">Google linked ✓</span> — you can sign in with Google on
+              any device.
+            </p>
+          ) : (
+            <LinkGoogle />
+          )}
         </>
       ) : (
         <>
@@ -159,14 +215,27 @@ function AccountSection() {
 }
 
 export function Settings() {
-  const { settings, updateSettings } = useApp();
+  const { settings, updateSettings, importData } = useApp();
   const [showKey, setShowKey] = useState(false);
   const [exported, setExported] = useState(false);
   const exportTimer = useRef<number | undefined>(undefined);
+  const importRef = useRef<HTMLInputElement>(null);
+  const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     return () => window.clearTimeout(exportTimer.current);
   }, []);
+
+  const handleImportFile = async (file: File | undefined) => {
+    if (!file) return;
+    setImportMsg(null);
+    try {
+      const count = await importData(await file.text());
+      setImportMsg({ ok: true, text: `Imported ${count} ${count === 1 ? 'record' : 'records'} ✓` });
+    } catch (err) {
+      setImportMsg({ ok: false, text: (err as Error).message || 'Import failed.' });
+    }
+  };
 
   const handleExport = async () => {
     const json = await exportAllData();
@@ -355,7 +424,33 @@ export function Settings() {
         >
           {exported ? <span className="text-accent">Exported ✓</span> : 'Export data as JSON'}
         </button>
-        <p className="mt-2 text-xs text-ink-faint">Photos stay on-device and aren't included.</p>
+        <button
+          type="button"
+          onClick={() => importRef.current?.click()}
+          className="label-caps mt-2 h-[50px] w-full border border-hairline text-[12px] tracking-[0.08em] text-ink-dim active:translate-y-px"
+        >
+          Import data from JSON
+        </button>
+        <input
+          ref={importRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = ''; // allow re-picking the same file
+            void handleImportFile(f);
+          }}
+        />
+        {importMsg && (
+          <p className={`mt-2 text-xs ${importMsg.ok ? 'text-accent' : 'text-danger'}`}>
+            {importMsg.text}
+          </p>
+        )}
+        <p className="mt-2 text-xs text-ink-faint">
+          Import merges a FuelTrack export into this device (nothing is deleted), then syncs.
+          Photos stay on-device and aren't included.
+        </p>
       </Section>
       </div>
 

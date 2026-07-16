@@ -126,19 +126,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       res.status(401).json({ error: 'Invalid session — log in again.' });
       return;
     }
-    let userId: string | null;
+    let raw: string | null;
     try {
       const tokenKey = `ft:auth:token:${token}`;
-      userId = connUrl
+      raw = connUrl
         ? await (await getTcpClient(connUrl.url)).get(tokenKey)
         : await restGet(restCreds!.url, restCreds!.token, tokenKey);
     } catch (err) {
       res.status(502).json({ error: `Sync storage error: ${(err as Error).message}` });
       return;
     }
-    if (!userId) {
+    if (!raw) {
       res.status(401).json({ error: 'Session expired — log in again.' });
       return;
+    }
+    // Tokens store JSON { id, email }; the earliest ones stored a bare id.
+    let userId = raw;
+    try {
+      const parsed = JSON.parse(raw) as { id?: string };
+      if (parsed && parsed.id) userId = parsed.id;
+    } catch {
+      // legacy bare-id token
     }
     key = `ft:sync:acct:${userId}`;
   } else {

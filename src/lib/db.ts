@@ -408,10 +408,13 @@ export async function applyMergedData(merged: {
 /** Export everything (except photos, which would bloat the file) as a JSON blob. */
 export async function exportAllData(): Promise<string> {
   const database = await db();
-  const [meals, days, insights] = await Promise.all([
+  const [meals, days, insights, workouts, routines, weights] = await Promise.all([
     database.getAll('meals'),
     database.getAll('days'),
     database.getAll('insights'),
+    database.getAll('workouts'),
+    database.getAll('routines'),
+    database.getAll('weights'),
   ]);
   return JSON.stringify(
     {
@@ -420,8 +423,84 @@ export async function exportAllData(): Promise<string> {
       meals: meals.sort((a, b) => a.loggedAt - b.loggedAt),
       days,
       insights,
+      workouts,
+      routines,
+      weights,
     },
     null,
     2,
   );
+}
+
+/**
+ * Import a previously exported JSON file: additive merge by id/key (existing
+ * records with the same id are overwritten, nothing else is deleted). Every
+ * imported record is stamped updatedAt=now so it wins the next sync merge and
+ * beats any old deletion tombstones — importing is an explicit "restore".
+ * Returns how many records were imported.
+ */
+export async function importAllData(raw: string): Promise<number> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('That file is not valid JSON.');
+  }
+  const data = parsed as {
+    meals?: Meal[];
+    days?: DayFlags[];
+    insights?: (CachedInsights & { id: string })[];
+    workouts?: Workout[];
+    routines?: Routine[];
+    weights?: WeightEntry[];
+  };
+  if (!Array.isArray(data.meals) && !Array.isArray(data.days)) {
+    throw new Error('That does not look like a FuelTrack export.');
+  }
+
+  const now = Date.now();
+  const database = await db();
+  const tx = database.transaction(
+    ['meals', 'days', 'insights', 'workouts', 'routines', 'weights', 'tombstones'],
+    'readwrite',
+  );
+  let count = 0;
+
+  for (const m of data.meals ?? []) {
+    if (!m || typeof m.id !== 'string' || typeof m.dateKey !== 'string') continue;
+    void tx.objectStore('meals').put({ ...m, updatedAt: now });
+    void tx.objectStore('tombstones').delete(`meals:${m.id}`);
+    count++;
+  }
+  for (const d of data.days ?? []) {
+    if (!d || typeof d.dateKey !== 'string') continue;
+    void tx.objectStore('days').put({ ...d, updatedAt: now });
+    count++;
+  }
+  for (const r of data.routines ?? []) {
+    if (!r || typeof r.id !== 'string') continue;
+    void tx.objectStore('routines').put({ ...r, updatedAt: now });
+    void tx.objectStore('tombstones').delete(`routines:${r.id}`);
+    count++;
+  }
+  for (const w of data.workouts ?? []) {
+    if (!w || typeof w.id !== 'string' || typeof w.dateKey !== 'string') continue;
+    void tx.objectStore('workouts').put({ ...w, updatedAt: now });
+    void tx.objectStore('tombstones').delete(`workouts:${w.id}`);
+    count++;
+  }
+  for (const w of data.weights ?? []) {
+    if (!w || typeof w.dateKey !== 'string' || typeof w.weightKg !== 'number') continue;
+    void tx.objectStore('weights').put({ ...w, updatedAt: now });
+    void tx.objectStore('tombstones').delete(`weights:${w.dateKey}`);
+    count++;
+  }
+  const insightsRow = (data.insights ?? [])[0];
+  if (insightsRow && insightsRow.insights) {
+    void tx.objectStore('insights').put({ ...insightsRow, id: 'weekly' });
+    count++;
+  }
+
+  await tx.done;
+  return count;
 }

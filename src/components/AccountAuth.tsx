@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../state/AppContext';
-import { AuthError, logIn, signUp } from '../lib/auth';
+import { AuthError, fetchAuthConfig, googleSignIn, logIn, signUp } from '../lib/auth';
+import { renderGoogleButton } from '../lib/google';
 
 /**
  * Email + password form for creating an account or logging in. On success the
@@ -14,6 +15,43 @@ export function AccountAuthForm({ onDone }: { onDone?: () => void }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const googleRef = useRef<HTMLDivElement>(null);
+  const [googleReady, setGoogleReady] = useState(false);
+
+  // Render Google's button when the server has a Client ID configured.
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAuthConfig().then((cfg) => {
+      if (cancelled || !cfg.googleClientId || !googleRef.current) return;
+      renderGoogleButton(googleRef.current, cfg.googleClientId, (idToken) => {
+        void (async () => {
+          setError(null);
+          try {
+            const session = await googleSignIn(idToken);
+            updateSettings({
+              authToken: session.token,
+              authEmail: session.email,
+              linkedGoogle: session.linkedGoogle ?? true,
+            });
+            onDone?.();
+            void syncNow();
+          } catch (err) {
+            setError(err instanceof AuthError ? err.message : 'Google sign-in failed — try again.');
+          }
+        })();
+      })
+        .then(() => {
+          if (!cancelled) setGoogleReady(true);
+        })
+        .catch(() => {
+          /* offline or blocked — email/password still works */
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const submit = async () => {
     if (busy) return;
@@ -22,7 +60,11 @@ export function AccountAuthForm({ onDone }: { onDone?: () => void }) {
     try {
       const session =
         mode === 'signup' ? await signUp(email, password) : await logIn(email, password);
-      updateSettings({ authToken: session.token, authEmail: session.email });
+      updateSettings({
+        authToken: session.token,
+        authEmail: session.email,
+        linkedGoogle: session.linkedGoogle ?? false,
+      });
       onDone?.();
       void syncNow();
     } catch (err) {
@@ -94,6 +136,15 @@ export function AccountAuthForm({ onDone }: { onDone?: () => void }) {
       >
         {busy ? 'Working…' : mode === 'signup' ? 'Create account ↗' : 'Log in ↗'}
       </button>
+
+      {/* Google — appears only when a Client ID is configured server-side.
+          The mount div stays in the DOM from the start so GIS can render into it. */}
+      <div className={googleReady ? 'mt-4 flex items-center gap-3' : 'hidden'}>
+        <span className="h-px flex-1 bg-hairline" />
+        <span className="label-caps text-[9.5px] tracking-[0.1em] text-ink-faint">or</span>
+        <span className="h-px flex-1 bg-hairline" />
+      </div>
+      <div ref={googleRef} className={googleReady ? 'mt-3 flex justify-center' : ''} />
     </form>
   );
 }

@@ -71,6 +71,8 @@ interface AppContextValue {
   /** Record a body-weight measurement for a day (defaults to today). */
   logWeight: (weightKg: number, dateKey?: string) => Promise<void>;
   removeWeight: (dateKey: string) => Promise<void>;
+  /** Import a FuelTrack JSON export (additive merge). Returns records imported. */
+  importData: (raw: string) => Promise<number>;
   /** Current cross-device sync state (off when disabled). */
   syncState: SyncState;
   /** Last sync error message, if the most recent attempt failed. */
@@ -401,6 +403,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const importData = useCallback(
+    async (raw: string) => {
+      const count = await db.importAllData(raw);
+      commit();
+      return count;
+    },
+    [commit],
+  );
+
   const value = useMemo<AppContextValue>(
     () => ({
       ready,
@@ -422,6 +433,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeWorkout,
       logWeight,
       removeWeight,
+      importData,
       syncState,
       syncError,
       lastSyncedAt,
@@ -446,6 +458,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeWorkout,
       logWeight,
       removeWeight,
+      importData,
       syncState,
       syncError,
       lastSyncedAt,

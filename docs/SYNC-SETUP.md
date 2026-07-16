@@ -45,3 +45,28 @@ Your data — including your API key — lives in the cloud store under the hash
 your sync code. Anyone who knows the code can read it, so keep the code secret.
 If you ever want to rotate it, generate a **New code** on one device and enter it
 on the others (the old store is simply abandoned).
+
+## Accounts & "Continue with Google" (optional, one-time)
+
+Email + password accounts work out of the box (same Redis). To also enable
+the **Continue with Google** button:
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) →
+   create/select a project → **APIs & Services → Credentials**.
+2. **Create Credentials → OAuth client ID → Web application.**
+   - Authorized JavaScript origins: `https://fueltrack.vercel.app`
+     (add `http://localhost:5173` too if you develop locally).
+   - No redirect URI needed (the button uses Google Identity Services).
+3. Copy the Client ID (ends in `.apps.googleusercontent.com`).
+4. In Vercel → your project → **Settings → Environment Variables**, add
+   `GOOGLE_CLIENT_ID` = that Client ID, then **redeploy**.
+
+The Google button then appears automatically on the login screen and in
+Settings → Account ("Link Google"). Signing in with Google auto-links to an
+existing account with the same (verified) email, so you can start with a
+password and add Google later.
+
+**Apple Sign-In** requires a paid Apple Developer account ($99/yr), a
+registered Services ID, and domain verification — it is not wired up. If you
+get an Apple Developer account, the auth endpoint is structured so it can be
+added the same way Google was.
