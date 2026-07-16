@@ -114,13 +114,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const nsRaw = req.query.ns;
-  const ns = Array.isArray(nsRaw) ? nsRaw[0] : nsRaw;
-  if (!ns || !NS_RE.test(ns)) {
-    res.status(400).json({ error: 'Missing or malformed ns.' });
-    return;
+  // Preferred: account auth. A Bearer token from /api/auth maps to a user id,
+  // and each account's snapshot lives under that id. The legacy ?ns=<hash>
+  // path (pre-account sync codes) still reads/writes so old clients keep
+  // working until every device has signed in.
+  let key: string;
+  const authHeader = req.headers.authorization ?? '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (token) {
+    if (!/^[a-f0-9]{64}$/.test(token)) {
+      res.status(401).json({ error: 'Invalid session — log in again.' });
+      return;
+    }
+    let userId: string | null;
+    try {
+      const tokenKey = `ft:auth:token:${token}`;
+      userId = connUrl
+        ? await (await getTcpClient(connUrl.url)).get(tokenKey)
+        : await restGet(restCreds!.url, restCreds!.token, tokenKey);
+    } catch (err) {
+      res.status(502).json({ error: `Sync storage error: ${(err as Error).message}` });
+      return;
+    }
+    if (!userId) {
+      res.status(401).json({ error: 'Session expired — log in again.' });
+      return;
+    }
+    key = `ft:sync:acct:${userId}`;
+  } else {
+    const nsRaw = req.query.ns;
+    const ns = Array.isArray(nsRaw) ? nsRaw[0] : nsRaw;
+    if (!ns || !NS_RE.test(ns)) {
+      res.status(401).json({ error: 'Not signed in.' });
+      return;
+    }
+    key = redisKey(ns);
   }
-  const key = redisKey(ns);
 
   try {
     if (req.method === 'GET') {

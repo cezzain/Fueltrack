@@ -137,8 +137,9 @@ export function mergeSnapshots(local: SyncSnapshot, remote: SyncSnapshot): SyncS
 export function syncableSettings(settings: Settings): Settings {
   const clone = { ...settings };
   for (const k of DEVICE_LOCAL_SETTINGS) {
-    // Blanked so a synced-in snapshot never overwrites device-local fields.
-    (clone as Record<string, unknown>)[k] = k === 'syncEnabled' ? false : '';
+    // Blanked so a synced-in snapshot never overwrites device-local fields
+    // (each device holds its own session token).
+    (clone as Record<string, unknown>)[k] = '';
   }
   return clone;
 }
@@ -181,55 +182,57 @@ export async function applySnapshot(snapshot: SyncSnapshot): Promise<void> {
 
 // ---- transport ----
 
-/** SHA-256 hex of the sync code — used as the (non-reversible) cloud store name. */
-export async function namespaceFor(syncCode: string): Promise<string> {
-  const bytes = new TextEncoder().encode(`fueltrack:${syncCode.trim()}`);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 export class SyncError extends Error {
-  constructor(message: string) {
+  /** True when the session token was rejected — the fix is signing in again. */
+  readonly authExpired: boolean;
+  constructor(message: string, authExpired = false) {
     super(message);
     this.name = 'SyncError';
+    this.authExpired = authExpired;
   }
 }
 
 const ENDPOINT = '/api/sync';
 
-/** Fetch the remote snapshot, or null if the store is empty (first push). */
-export async function pullSnapshot(syncCode: string): Promise<SyncSnapshot | null> {
-  const ns = await namespaceFor(syncCode);
+function checkCommonErrors(res: Response): void {
+  if (res.status === 401) {
+    throw new SyncError('Session expired — log in again in Settings.', true);
+  }
+  if (res.status === 503) {
+    throw new SyncError('Sync is not configured on the server yet (no storage connected).');
+  }
+}
+
+/** Fetch the account's snapshot, or null if the store is empty (first push). */
+export async function pullSnapshot(token: string): Promise<SyncSnapshot | null> {
   let res: Response;
   try {
-    res = await fetch(`${ENDPOINT}?ns=${ns}`, { method: 'GET' });
+    res = await fetch(ENDPOINT, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
   } catch {
     throw new SyncError('Could not reach the sync server — check your connection.');
   }
   if (res.status === 404) return null;
-  if (res.status === 503) {
-    throw new SyncError('Sync is not configured on the server yet (no storage connected).');
-  }
+  checkCommonErrors(res);
   if (!res.ok) throw new SyncError(`Sync server error (${res.status}).`);
   const body = (await res.json()) as { snapshot?: SyncSnapshot | null };
   return body.snapshot ?? null;
 }
 
-export async function pushSnapshot(syncCode: string, snapshot: SyncSnapshot): Promise<void> {
-  const ns = await namespaceFor(syncCode);
+export async function pushSnapshot(token: string, snapshot: SyncSnapshot): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(`${ENDPOINT}?ns=${ns}`, {
+    res = await fetch(ENDPOINT, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ snapshot }),
     });
   } catch {
     throw new SyncError('Could not reach the sync server — check your connection.');
   }
-  if (res.status === 503) {
-    throw new SyncError('Sync is not configured on the server yet (no storage connected).');
-  }
+  checkCommonErrors(res);
   if (res.status === 413) {
     throw new SyncError('Too much data to sync in one request.');
   }
@@ -253,15 +256,15 @@ export async function syncNow(
   settings: Settings,
   settingsUpdatedAt: number,
 ): Promise<SyncResult> {
-  const code = settings.syncCode.trim();
-  if (!code) throw new SyncError('Set a sync code first.');
+  const token = settings.authToken.trim();
+  if (!token) throw new SyncError('Log in first.');
 
   const local = await buildSnapshot(settings, settingsUpdatedAt);
-  const remote = await pullSnapshot(code);
+  const remote = await pullSnapshot(token);
   const merged = remote ? mergeSnapshots(local, remote) : local;
 
   await applySnapshot(merged);
-  await pushSnapshot(code, merged);
+  await pushSnapshot(token, merged);
 
   return {
     settings: merged.settings,

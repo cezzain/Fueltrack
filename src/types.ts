@@ -172,10 +172,10 @@ export interface Settings {
   heightCm: number;
   weightKg: number;
   ageYears: number;
-  /** Cross-device cloud sync on/off. */
-  syncEnabled: boolean;
-  /** Shared secret that names + guards this account's cloud store. */
-  syncCode: string;
+  /** Session token from /api/auth — signed in (and syncing) when non-empty. */
+  authToken: string;
+  /** Email of the signed-in account, for display. */
+  authEmail: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -187,16 +187,16 @@ export const DEFAULT_SETTINGS: Settings = {
   heightCm: 185, // 6'1"
   weightKg: 61,
   ageYears: 18,
-  syncEnabled: false,
-  syncCode: '',
+  authToken: '',
+  authEmail: '',
 };
 
 /**
- * Settings fields that must NOT travel between devices — either device-local
- * (the sync toggle) or already-known to both sides (the sync code itself).
- * Everything else, including API keys and targets, syncs.
+ * Settings fields that must NOT travel between devices — the session token
+ * is per-device (each device logs in itself). Everything else, including API
+ * keys and targets, syncs.
  */
-export const DEVICE_LOCAL_SETTINGS: (keyof Settings)[] = ['syncEnabled', 'syncCode'];
+export const DEVICE_LOCAL_SETTINGS: (keyof Settings)[] = ['authToken', 'authEmail'];
 
 /** The key for the currently selected AI provider. */
 export function activeApiKey(settings: Settings): string {

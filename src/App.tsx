@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AppProvider, useApp } from './state/AppContext';
 import { TabBar } from './components/TabBar';
 import { TopNav } from './components/TopNav';
@@ -8,6 +9,7 @@ import { Calendar } from './screens/Calendar';
 import { History } from './screens/History';
 import { Insights } from './screens/Insights';
 import { Settings } from './screens/Settings';
+import { AuthGate } from './screens/AuthGate';
 import { formatDayLabel } from './lib/dates';
 
 /** Mobile-only masthead; the desktop TopNav carries the wordmark + date on md+. */
@@ -21,14 +23,30 @@ function Masthead() {
   );
 }
 
+const SKIP_KEY = 'fueltrack.authSkipped.v1';
+
 function Screens() {
-  const { ready, tab } = useApp();
+  const { ready, tab, settings } = useApp();
+  const [skipped, setSkipped] = useState(() => localStorage.getItem(SKIP_KEY) === '1');
 
   if (!ready) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
         <div className="label-caps animate-pulse text-sm text-ink-faint">FuelTrack</div>
       </div>
+    );
+  }
+
+  // First run (or after signing out on an un-skipped device): offer an
+  // account before the app, with a skip path for device-only use.
+  if (!settings.authToken && !skipped) {
+    return (
+      <AuthGate
+        onSkip={() => {
+          localStorage.setItem(SKIP_KEY, '1');
+          setSkipped(true);
+        }}
+      />
     );
   }
 

@@ -94,7 +94,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ---- cross-device sync ----
   const [syncState, setSyncState] = useState<SyncState>(
-    settings.syncEnabled ? 'idle' : 'off',
+    settings.authToken ? 'idle' : 'off',
   );
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -107,7 +107,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const doSync = useCallback(async () => {
     const s = settingsRef.current;
-    if (!s.syncEnabled || !s.syncCode.trim() || !readyRef.current) return;
+    if (!s.authToken.trim() || !readyRef.current) return;
     if (syncingRef.current) return;
     syncingRef.current = true;
     setSyncState('syncing');
@@ -115,12 +115,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const result = await runSync(s, settingsUpdatedAtRef.current);
       // Adopt remote settings only if they're strictly newer than ours, and
-      // always keep this device's local sync toggle + code.
+      // always keep this device's own session token.
       if (result.settings && result.settingsUpdatedAt > settingsUpdatedAtRef.current) {
         const applied: Settings = {
           ...result.settings,
-          syncEnabled: s.syncEnabled,
-          syncCode: s.syncCode,
+          authToken: s.authToken,
+          authEmail: s.authEmail,
         };
         settingsUpdatedAtRef.current = result.settingsUpdatedAt;
         saveSettings(applied, result.settingsUpdatedAt);
@@ -130,6 +130,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSyncState('ok');
       bump(); // surface merged-in meals/days to the hooks
     } catch (err) {
+      if (err instanceof SyncError && err.authExpired) {
+        // Token was revoked/expired server-side — drop it so the UI shows
+        // signed-out instead of erroring forever.
+        setSettings((prev) => {
+          const next = { ...prev, authToken: '', authEmail: '' };
+          saveSettings(next, settingsUpdatedAtRef.current);
+          return next;
+        });
+      }
       setSyncError(err instanceof SyncError ? err.message : 'Sync failed — try again.');
       setSyncState('error');
     } finally {
@@ -139,7 +148,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /** Debounced push after local edits, so rapid changes coalesce into one sync. */
   const scheduleSync = useCallback(() => {
-    if (!settingsRef.current.syncEnabled) return;
+    if (!settingsRef.current.authToken.trim()) return;
     window.clearTimeout(syncTimerRef.current);
     syncTimerRef.current = window.setTimeout(() => void doSync(), 3000);
   }, [doSync]);
@@ -165,12 +174,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Sync lifecycle: run once when it turns on / the app is ready, then on a
-  // timer and whenever the app regains focus (covers the common "logged on my
-  // phone, now opening the iPad" case). Re-subscribes if the code changes.
+  // Sync lifecycle: run once on sign-in / app ready, then on a timer and
+  // whenever the app regains focus (covers the common "logged on my phone,
+  // now opening the iPad" case). Re-subscribes if the account changes.
   useEffect(() => {
     if (!ready) return;
-    if (!settings.syncEnabled || !settings.syncCode.trim()) {
+    if (!settings.authToken.trim()) {
       setSyncState('off');
       return;
     }
@@ -188,7 +197,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [ready, settings.syncEnabled, settings.syncCode, doSync]);
+  }, [ready, settings.authToken, doSync]);
 
   // Day rollover at Dubai midnight: re-check on an interval and when the app
   // returns to the foreground (iOS suspends timers while backgrounded).

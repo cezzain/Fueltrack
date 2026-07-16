@@ -4,6 +4,7 @@ import { useApp } from '../state/AppContext';
 import { activeModelLabel } from '../lib/ai';
 import { exportAllData } from '../lib/db';
 import { formatTime, todayKey } from '../lib/dates';
+import { AccountAuthForm } from '../components/AccountAuth';
 
 function Section({ title, chip, children }: { title: string; chip?: ReactNode; children: ReactNode }) {
   return (
@@ -94,44 +95,9 @@ function EyeIcon({ off }: { off: boolean }) {
   );
 }
 
-/** Readable, unambiguous random code (no 0/O/1/I) grouped for easy typing. */
-function generateSyncCode(): string {
-  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  const chars = Array.from(bytes, (b) => alphabet[b % alphabet.length]);
-  return [0, 4, 8, 12].map((i) => chars.slice(i, i + 4).join('')).join('-');
-}
-
-function SyncSection() {
+function AccountSection() {
   const { settings, updateSettings, syncState, syncError, lastSyncedAt, syncNow } = useApp();
-  const [showCode, setShowCode] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const copyTimer = useRef<number | undefined>(undefined);
-
-  useEffect(() => () => window.clearTimeout(copyTimer.current), []);
-
-  const enabled = settings.syncEnabled;
-  const code = settings.syncCode;
-
-  const toggle = () => {
-    if (!enabled && !code.trim()) {
-      updateSettings({ syncEnabled: true, syncCode: generateSyncCode() });
-    } else {
-      updateSettings({ syncEnabled: !enabled });
-    }
-  };
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      window.clearTimeout(copyTimer.current);
-      copyTimer.current = window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard blocked — the code is visible to copy manually */
-    }
-  };
+  const signedIn = settings.authToken.trim().length > 0;
 
   const status = (() => {
     if (syncState === 'syncing') return <span className="text-ink-dim">Syncing…</span>;
@@ -142,86 +108,50 @@ function SyncSection() {
 
   return (
     <Section
-      title="Sync across devices"
+      title="Account"
       chip={
-        enabled ? (
-          <span className="label-caps text-[10px] tracking-[0.08em] text-accent">on</span>
+        signedIn ? (
+          <span className="label-caps text-[10px] tracking-[0.08em] text-accent">signed in</span>
         ) : (
-          <span className="label-caps text-[10px] tracking-[0.08em] text-ink-faint">off</span>
+          <span className="label-caps text-[10px] tracking-[0.08em] text-ink-faint">
+            signed out
+          </span>
         )
       }
     >
-      <button
-        type="button"
-        onClick={toggle}
-        aria-pressed={enabled}
-        className={`label-caps h-11 w-full border-[1.5px] border-edge text-[12px] tracking-[0.08em] transition-colors ${
-          enabled ? 'bg-ink text-surface' : 'bg-transparent text-ink'
-        }`}
-      >
-        {enabled ? 'Turn sync off' : 'Turn sync on'}
-      </button>
-
-      {enabled && (
+      {signedIn ? (
         <>
-          <p className="mt-3 text-xs text-ink-dim">
-            Enter this <span className="font-semibold text-ink">same code</span> on your other
-            devices to share one account.
+          <p className="serif text-[17px] text-ink">{settings.authEmail}</p>
+          <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+            Meals, workouts, weight, targets, and your API key sync to every device you log in on.
+            Meal photos stay on-device.
           </p>
-          <div className="relative mt-2">
-            <input
-              type={showCode ? 'text' : 'password'}
-              autoComplete="off"
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder="XXXX-XXXX-XXXX-XXXX"
-              className="num h-11 w-full border-[1.5px] border-edge bg-bg px-3 pr-12 text-[14px] tracking-[0.08em] text-ink outline-none placeholder:text-ink-faint focus:border-accent"
-              value={code}
-              onChange={(e) => updateSettings({ syncCode: e.target.value })}
-              aria-label="Sync code"
-            />
-            <button
-              type="button"
-              onClick={() => setShowCode((s) => !s)}
-              className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-ink-dim active:translate-y-px"
-              aria-label={showCode ? 'Hide sync code' : 'Show sync code'}
-            >
-              <EyeIcon off={showCode} />
-            </button>
-          </div>
-
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => updateSettings({ syncCode: generateSyncCode() })}
-              className="label-caps h-10 flex-1 border border-hairline text-[10px] tracking-[0.06em] text-ink-dim active:translate-y-px"
-            >
-              New code
-            </button>
-            <button
-              type="button"
-              onClick={() => void copy()}
-              className="label-caps h-10 flex-1 border border-hairline text-[10px] tracking-[0.06em] text-ink-dim active:translate-y-px"
-            >
-              {copied ? <span className="text-accent">Copied ✓</span> : 'Copy'}
-            </button>
+          <div className="mt-3 flex gap-2">
             <button
               type="button"
               onClick={() => void syncNow()}
-              disabled={syncState === 'syncing' || !code.trim()}
-              className="label-caps h-10 flex-1 border-[1.5px] border-edge bg-accent text-[10px] tracking-[0.06em] text-surface active:translate-y-px disabled:opacity-40"
+              disabled={syncState === 'syncing'}
+              className="label-caps h-11 flex-1 border-[1.5px] border-edge bg-accent text-[11px] tracking-[0.06em] text-surface active:translate-y-px disabled:opacity-40"
             >
               Sync now
             </button>
+            <button
+              type="button"
+              onClick={() => updateSettings({ authToken: '', authEmail: '' })}
+              className="label-caps h-11 flex-1 border border-hairline text-[11px] tracking-[0.06em] text-ink-dim active:translate-y-px"
+            >
+              Sign out
+            </button>
           </div>
-
           <p className="mt-2.5 text-xs leading-relaxed">{status}</p>
-
-          <p className="mt-3 text-xs leading-relaxed text-warn/90">
-            Your data and API key are stored in the cloud under this code — anyone who has the code
-            can read them, so keep it secret. Meal photos don&rsquo;t sync.
+        </>
+      ) : (
+        <>
+          <p className="mb-3 text-xs leading-relaxed text-ink-dim">
+            Create an account (or log in) to sync your data across devices. Signing out keeps your
+            data on this device.
           </p>
+          <AccountAuthForm />
         </>
       )}
     </Section>
@@ -415,7 +345,7 @@ export function Settings() {
         </p>
       </Section>
 
-      <SyncSection />
+      <AccountSection />
 
       <Section title="Data">
         <button
