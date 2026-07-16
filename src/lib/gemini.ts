@@ -84,7 +84,7 @@ async function callGemini(
       throw new AiError('Gemini rejected the API key — check it in Settings.', false);
     }
     if (res.status === 429) {
-      throw new AiError('Gemini rate limited — wait a moment and retry.', true);
+      throw new AiError('Gemini rate limited — the free tier only allows a few requests per minute. Wait ~30s and retry.', true);
     }
     throw new AiError(
       res.status >= 500
