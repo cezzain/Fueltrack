@@ -50,7 +50,7 @@ export function Train() {
         </div>
 
         {/* Workouts + this-week strip — left column on desktop. */}
-        <div className="md:order-1 md:mt-0">
+        <div className="mt-9 md:order-1 md:mt-0">
           <WorkoutsSection
             routines={routines}
             workoutsByDate={workoutsByDate}
