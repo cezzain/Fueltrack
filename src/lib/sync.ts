@@ -12,6 +12,8 @@
 import type {
   CachedInsights,
   DayFlags,
+  Habit,
+  HabitCheck,
   Meal,
   Routine,
   Settings,
@@ -127,6 +129,12 @@ export function mergeSnapshots(local: SyncSnapshot, remote: SyncSnapshot): SyncS
     weights: mergeRecords<WeightEntry>(
       local.weights ?? [], remote.weights ?? [], (r) => r.dateKey, 'weights', tombMap,
     ),
+    habits: mergeRecords<Habit>(
+      local.habits ?? [], remote.habits ?? [], (r) => r.id, 'habits', tombMap,
+    ),
+    habitChecks: mergeRecords<HabitCheck>(
+      local.habitChecks ?? [], remote.habitChecks ?? [], (r) => r.key, 'habitChecks', tombMap,
+    ),
     settings,
     settingsUpdatedAt,
     pushedAt: now,
@@ -150,7 +158,7 @@ export async function buildSnapshot(
   settings: Settings,
   settingsUpdatedAt: number,
 ): Promise<SyncSnapshot> {
-  const { meals, days, insights, tombstones, workouts, routines, weights } =
+  const { meals, days, insights, tombstones, workouts, routines, weights, habits, habitChecks } =
     await getSyncableData();
   return {
     v: 1,
@@ -161,6 +169,8 @@ export async function buildSnapshot(
     workouts,
     routines,
     weights,
+    habits,
+    habitChecks,
     settings: syncableSettings(settings),
     settingsUpdatedAt,
     pushedAt: Date.now(),
@@ -177,6 +187,8 @@ export async function applySnapshot(snapshot: SyncSnapshot): Promise<void> {
     workouts: snapshot.workouts ?? [],
     routines: snapshot.routines ?? [],
     weights: snapshot.weights ?? [],
+    habits: snapshot.habits ?? [],
+    habitChecks: snapshot.habitChecks ?? [],
   });
 }
 

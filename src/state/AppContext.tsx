@@ -12,6 +12,9 @@ import {
 import type {
   AnalysisResult,
   DaySummary,
+  Habit,
+  HabitCheck,
+  HabitKind,
   Meal,
   MealSource,
   MealType,
@@ -71,6 +74,11 @@ interface AppContextValue {
   /** Record a body-weight measurement for a day (defaults to today). */
   logWeight: (weightKg: number, dateKey?: string) => Promise<void>;
   removeWeight: (dateKey: string) => Promise<void>;
+  /** Create a tracked habit or addiction to quit. */
+  addHabit: (name: string, kind: HabitKind, color: string) => Promise<Habit | null>;
+  removeHabit: (id: string) => Promise<void>;
+  /** Toggle whether a habit was completed / stayed clean on a day. */
+  toggleHabitCheck: (habitId: string, dateKey: string) => Promise<void>;
   /** Import a FuelTrack JSON export (additive merge). Returns records imported. */
   importData: (raw: string) => Promise<number>;
   /** Current cross-device sync state (off when disabled). */
@@ -403,6 +411,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
+  const addHabit = useCallback(
+    async (name: string, kind: HabitKind, color: string): Promise<Habit | null> => {
+      const trimmed = name.trim();
+      if (!trimmed) return null;
+      const habit: Habit = { id: newId(), name: trimmed, kind, color, createdAt: Date.now() };
+      await db.putHabit(habit);
+      commit();
+      return habit;
+    },
+    [commit],
+  );
+
+  const removeHabit = useCallback(
+    async (id: string) => {
+      await db.deleteHabit(id);
+      commit();
+    },
+    [commit],
+  );
+
+  const toggleHabitCheck = useCallback(
+    async (habitId: string, dateKey: string) => {
+      await db.toggleHabitCheck(habitId, dateKey);
+      commit();
+    },
+    [commit],
+  );
+
   const importData = useCallback(
     async (raw: string) => {
       const count = await db.importAllData(raw);
@@ -433,6 +469,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeWorkout,
       logWeight,
       removeWeight,
+      addHabit,
+      removeHabit,
+      toggleHabitCheck,
       importData,
       syncState,
       syncError,
@@ -458,6 +497,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       removeWorkout,
       logWeight,
       removeWeight,
+      addHabit,
+      removeHabit,
+      toggleHabitCheck,
       importData,
       syncState,
       syncError,
@@ -602,6 +644,40 @@ export function useWeights(): WeightEntry[] | null {
     };
   }, [version, ready]);
   return weights;
+}
+
+/** Live list of tracked habits, oldest-first (stable chip order). */
+export function useHabits(): Habit[] | null {
+  const { version, ready } = useApp();
+  const [habits, setHabits] = useState<Habit[] | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    db.getHabits().then((h) => {
+      if (!cancelled) setHabits(h);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [version, ready]);
+  return habits;
+}
+
+/** Live list of all habit completion marks (across every habit). */
+export function useHabitChecks(): HabitCheck[] | null {
+  const { version, ready } = useApp();
+  const [checks, setChecks] = useState<HabitCheck[] | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    db.getHabitChecks().then((c) => {
+      if (!cancelled) setChecks(c);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [version, ready]);
+  return checks;
 }
 
 /** Load a stored photo's data URL by id. */

@@ -11,6 +11,7 @@ const PRIMARY: { id: Tab; label: string }[] = [
 ];
 
 const MORE: { id: Tab; label: string }[] = [
+  { id: 'habits', label: 'Habits' },
   { id: 'history', label: 'History' },
   { id: 'insights', label: 'Insights' },
   { id: 'settings', label: 'Settings' },

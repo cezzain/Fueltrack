@@ -3,6 +3,8 @@ import type {
   CachedInsights,
   DayFlags,
   DaySummary,
+  Habit,
+  HabitCheck,
   Meal,
   Routine,
   Tombstone,
@@ -50,13 +52,22 @@ interface FuelTrackDB extends DBSchema {
     key: string; // dateKey — one weigh-in per day
     value: WeightEntry;
   };
+  habits: {
+    key: string;
+    value: Habit;
+  };
+  habitChecks: {
+    key: string; // `${habitId}:${dateKey}`
+    value: HabitCheck;
+    indexes: { 'by-habit': string };
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<FuelTrackDB>> | null = null;
 
 function db(): Promise<IDBPDatabase<FuelTrackDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<FuelTrackDB>('fueltrack', 3, {
+    dbPromise = openDB<FuelTrackDB>('fueltrack', 4, {
       upgrade(database, oldVersion) {
         if (oldVersion < 1) {
           const meals = database.createObjectStore('meals', { keyPath: 'id' });
@@ -77,6 +88,12 @@ function db(): Promise<IDBPDatabase<FuelTrackDB>> {
           workouts.createIndex('by-date', 'dateKey');
           database.createObjectStore('routines', { keyPath: 'id' });
           database.createObjectStore('weights', { keyPath: 'dateKey' });
+        }
+        if (oldVersion < 4) {
+          // Habits tab: tracked habits/addictions + per-day completion marks.
+          database.createObjectStore('habits', { keyPath: 'id' });
+          const checks = database.createObjectStore('habitChecks', { keyPath: 'key' });
+          checks.createIndex('by-habit', 'habitId');
         }
       },
     });
@@ -233,6 +250,67 @@ export async function deleteWeight(dateKey: string): Promise<void> {
   await tx.done;
 }
 
+// ---- habits / habit checks (Habits tab) ----
+
+export async function getHabits(): Promise<Habit[]> {
+  const rows = await (await db()).getAll('habits');
+  // Oldest-first so the chip order (and default selection) is stable.
+  return rows.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export async function putHabit(habit: Habit): Promise<void> {
+  const database = await db();
+  const stamped: Habit = { ...habit, updatedAt: habit.updatedAt ?? Date.now() };
+  const tx = database.transaction(['habits', 'tombstones'], 'readwrite');
+  void tx.objectStore('habits').put(stamped);
+  void tx.objectStore('tombstones').delete(tombstoneKey('habits', habit.id));
+  await tx.done;
+}
+
+/** Delete a habit and every check under it, tombstoning all of them for sync. */
+export async function deleteHabit(id: string): Promise<void> {
+  const database = await db();
+  const checkKeys = await database.getAllKeysFromIndex('habitChecks', 'by-habit', id);
+  const tx = database.transaction(['habits', 'habitChecks', 'tombstones'], 'readwrite');
+  void tx.objectStore('habits').delete(id);
+  void tx.objectStore('tombstones').put(makeTombstone('habits', id));
+  const checkStore = tx.objectStore('habitChecks');
+  const tombStore = tx.objectStore('tombstones');
+  for (const k of checkKeys) {
+    void checkStore.delete(k);
+    void tombStore.put(makeTombstone('habitChecks', k));
+  }
+  await tx.done;
+}
+
+export async function getHabitChecks(): Promise<HabitCheck[]> {
+  return (await db()).getAll('habitChecks');
+}
+
+/**
+ * Toggle a habit's completion for one day, in a single transaction so rapid
+ * taps can't race. Adds a check (and clears any prior deletion tombstone) or
+ * removes it (writing a tombstone). Returns the day's new checked state.
+ */
+export async function toggleHabitCheck(habitId: string, dateKey: string): Promise<boolean> {
+  const key = `${habitId}:${dateKey}`;
+  const database = await db();
+  const tx = database.transaction(['habitChecks', 'tombstones'], 'readwrite');
+  const existing = await tx.objectStore('habitChecks').get(key);
+  let checked: boolean;
+  if (existing) {
+    void tx.objectStore('habitChecks').delete(key);
+    void tx.objectStore('tombstones').put(makeTombstone('habitChecks', key));
+    checked = false;
+  } else {
+    void tx.objectStore('habitChecks').put({ key, habitId, dateKey, updatedAt: Date.now() });
+    void tx.objectStore('tombstones').delete(tombstoneKey('habitChecks', key));
+    checked = true;
+  }
+  await tx.done;
+  return checked;
+}
+
 // ---- photos ----
 
 export async function savePhoto(id: string, dataUrl: string): Promise<void> {
@@ -332,18 +410,33 @@ export async function getSyncableData(): Promise<{
   workouts: Workout[];
   routines: Routine[];
   weights: WeightEntry[];
+  habits: Habit[];
+  habitChecks: HabitCheck[];
 }> {
   const database = await db();
-  const [meals, days, insightsRows, tombstones, workouts, routines, weights] = await Promise.all([
-    database.getAll('meals'),
-    database.getAll('days'),
-    database.getAll('insights'),
-    database.getAll('tombstones'),
-    database.getAll('workouts'),
-    database.getAll('routines'),
-    database.getAll('weights'),
-  ]);
-  return { meals, days, insights: insightsRows[0] ?? null, tombstones, workouts, routines, weights };
+  const [meals, days, insightsRows, tombstones, workouts, routines, weights, habits, habitChecks] =
+    await Promise.all([
+      database.getAll('meals'),
+      database.getAll('days'),
+      database.getAll('insights'),
+      database.getAll('tombstones'),
+      database.getAll('workouts'),
+      database.getAll('routines'),
+      database.getAll('weights'),
+      database.getAll('habits'),
+      database.getAll('habitChecks'),
+    ]);
+  return {
+    meals,
+    days,
+    insights: insightsRows[0] ?? null,
+    tombstones,
+    workouts,
+    routines,
+    weights,
+    habits,
+    habitChecks,
+  };
 }
 
 /**
@@ -360,10 +453,23 @@ export async function applyMergedData(merged: {
   workouts: Workout[];
   routines: Routine[];
   weights: WeightEntry[];
+  habits: Habit[];
+  habitChecks: HabitCheck[];
 }): Promise<void> {
   const database = await db();
   const tx = database.transaction(
-    ['meals', 'days', 'insights', 'photos', 'tombstones', 'workouts', 'routines', 'weights'],
+    [
+      'meals',
+      'days',
+      'insights',
+      'photos',
+      'tombstones',
+      'workouts',
+      'routines',
+      'weights',
+      'habits',
+      'habitChecks',
+    ],
     'readwrite',
   );
   const mealStore = tx.objectStore('meals');
@@ -384,7 +490,9 @@ export async function applyMergedData(merged: {
 
   // Same replace pattern for the Train stores: anything not in the merged
   // set was deleted (tombstoned) on some device — drop it here too.
-  const replaceStore = async <N extends 'workouts' | 'routines' | 'weights'>(
+  const replaceStore = async <
+    N extends 'workouts' | 'routines' | 'weights' | 'habits' | 'habitChecks',
+  >(
     name: N,
     rows: FuelTrackDB[N]['value'][],
     keyOf: (r: FuelTrackDB[N]['value']) => string,
@@ -398,6 +506,8 @@ export async function applyMergedData(merged: {
   await replaceStore('workouts', merged.workouts, (r) => r.id);
   await replaceStore('routines', merged.routines, (r) => r.id);
   await replaceStore('weights', merged.weights, (r) => r.dateKey);
+  await replaceStore('habits', merged.habits, (r) => r.id);
+  await replaceStore('habitChecks', merged.habitChecks, (r) => r.key);
 
   const tombStore = tx.objectStore('tombstones');
   for (const t of merged.tombstones) void tombStore.put(t);
@@ -408,14 +518,17 @@ export async function applyMergedData(merged: {
 /** Export everything (except photos, which would bloat the file) as a JSON blob. */
 export async function exportAllData(): Promise<string> {
   const database = await db();
-  const [meals, days, insights, workouts, routines, weights] = await Promise.all([
-    database.getAll('meals'),
-    database.getAll('days'),
-    database.getAll('insights'),
-    database.getAll('workouts'),
-    database.getAll('routines'),
-    database.getAll('weights'),
-  ]);
+  const [meals, days, insights, workouts, routines, weights, habits, habitChecks] =
+    await Promise.all([
+      database.getAll('meals'),
+      database.getAll('days'),
+      database.getAll('insights'),
+      database.getAll('workouts'),
+      database.getAll('routines'),
+      database.getAll('weights'),
+      database.getAll('habits'),
+      database.getAll('habitChecks'),
+    ]);
   return JSON.stringify(
     {
       exportedAt: new Date().toISOString(),
@@ -426,6 +539,8 @@ export async function exportAllData(): Promise<string> {
       workouts,
       routines,
       weights,
+      habits,
+      habitChecks,
     },
     null,
     2,
@@ -453,6 +568,8 @@ export async function importAllData(raw: string): Promise<number> {
     workouts?: Workout[];
     routines?: Routine[];
     weights?: WeightEntry[];
+    habits?: Habit[];
+    habitChecks?: HabitCheck[];
   };
   if (!Array.isArray(data.meals) && !Array.isArray(data.days)) {
     throw new Error('That does not look like a FuelTrack export.');
@@ -461,7 +578,17 @@ export async function importAllData(raw: string): Promise<number> {
   const now = Date.now();
   const database = await db();
   const tx = database.transaction(
-    ['meals', 'days', 'insights', 'workouts', 'routines', 'weights', 'tombstones'],
+    [
+      'meals',
+      'days',
+      'insights',
+      'workouts',
+      'routines',
+      'weights',
+      'habits',
+      'habitChecks',
+      'tombstones',
+    ],
     'readwrite',
   );
   let count = 0;
@@ -493,6 +620,19 @@ export async function importAllData(raw: string): Promise<number> {
     if (!w || typeof w.dateKey !== 'string' || typeof w.weightKg !== 'number') continue;
     void tx.objectStore('weights').put({ ...w, updatedAt: now });
     void tx.objectStore('tombstones').delete(`weights:${w.dateKey}`);
+    count++;
+  }
+  for (const h of data.habits ?? []) {
+    if (!h || typeof h.id !== 'string' || typeof h.name !== 'string') continue;
+    void tx.objectStore('habits').put({ ...h, updatedAt: now });
+    void tx.objectStore('tombstones').delete(`habits:${h.id}`);
+    count++;
+  }
+  for (const c of data.habitChecks ?? []) {
+    if (!c || typeof c.key !== 'string' || typeof c.habitId !== 'string' || typeof c.dateKey !== 'string')
+      continue;
+    void tx.objectStore('habitChecks').put({ ...c, updatedAt: now });
+    void tx.objectStore('tombstones').delete(`habitChecks:${c.key}`);
     count++;
   }
   const insightsRow = (data.insights ?? [])[0];

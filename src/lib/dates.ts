@@ -110,6 +110,11 @@ export function tomorrowKey(): string {
   return dateKeyFor(new Date(Date.now() + 24 * 60 * 60 * 1000));
 }
 
+/** The Dubai-time date key one day before the given key (for streak walks). */
+export function prevDateKey(dateKey: string): string {
+  return dateKeyFor(new Date(representativeDate(dateKey).getTime() - 24 * 60 * 60 * 1000));
+}
+
 /**
  * Calendar-month grid data (Dubai time) for the month `offset` months away
  * from the current one (0 = this month, -1 = last month …): a "July 2026"

@@ -6,6 +6,7 @@ import { Today } from './screens/Today';
 import { Log } from './screens/Log';
 import { Train } from './screens/Train';
 import { Calendar } from './screens/Calendar';
+import { Habits } from './screens/Habits';
 import { History } from './screens/History';
 import { Insights } from './screens/Insights';
 import { Settings } from './screens/Settings';
@@ -73,6 +74,9 @@ function Screens() {
         </div>
         <div hidden={tab !== 'calendar'}>
           <Calendar />
+        </div>
+        <div hidden={tab !== 'habits'}>
+          <Habits />
         </div>
         <div hidden={tab !== 'history'}>
           <History />

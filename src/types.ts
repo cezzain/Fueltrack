@@ -78,8 +78,46 @@ export interface WeightEntry {
   updatedAt?: number;
 }
 
+/**
+ * A tracked habit or addiction. `build` = a good habit to do each day; `quit` =
+ * something to stop, where a marked day means "stayed clean". `color` is one of
+ * the habit palette hexes, used to fill completed days on the calendar grid.
+ */
+export type HabitKind = 'build' | 'quit';
+
+export interface Habit {
+  id: string;
+  name: string;
+  kind: HabitKind;
+  /** Hex colour (from the habit palette) that fills completed days. */
+  color: string;
+  createdAt: number;
+  /** Epoch ms of the last write — drives last-write-wins cross-device sync. */
+  updatedAt?: number;
+}
+
+/**
+ * One completed day for a habit. Presence of the record means the day was a
+ * success (habit done / stayed clean); its absence means it wasn't. Keyed by
+ * `${habitId}:${dateKey}` so at most one exists per habit per day.
+ */
+export interface HabitCheck {
+  key: string;
+  habitId: string;
+  /** YYYY-MM-DD in Asia/Dubai time. */
+  dateKey: string;
+  updatedAt?: number;
+}
+
 /** Which store a record lived in, for a deletion tombstone. */
-export type TombstoneStore = 'meals' | 'days' | 'workouts' | 'routines' | 'weights';
+export type TombstoneStore =
+  | 'meals'
+  | 'days'
+  | 'workouts'
+  | 'routines'
+  | 'weights'
+  | 'habits'
+  | 'habitChecks';
 
 /**
  * Record of a deletion, so a delete on one device propagates to others
@@ -105,6 +143,9 @@ export interface SyncSnapshot {
   workouts?: Workout[];
   routines?: Routine[];
   weights?: WeightEntry[];
+  /** Optional so snapshots pushed before the Habits tab existed still parse. */
+  habits?: Habit[];
+  habitChecks?: HabitCheck[];
   /** Synced settings (incl. API keys) + the epoch ms they last changed. */
   settings: Settings | null;
   settingsUpdatedAt: number;
@@ -206,7 +247,15 @@ export function activeApiKey(settings: Settings): string {
   return (settings.provider === 'gemini' ? settings.geminiApiKey : settings.apiKey).trim();
 }
 
-export type Tab = 'today' | 'log' | 'train' | 'calendar' | 'history' | 'insights' | 'settings';
+export type Tab =
+  | 'today'
+  | 'log'
+  | 'train'
+  | 'calendar'
+  | 'habits'
+  | 'history'
+  | 'insights'
+  | 'settings';
 
 export function newId(): string {
   // crypto.randomUUID needs Safari 15.4+ and a secure context.
