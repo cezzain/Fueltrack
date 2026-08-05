@@ -24,7 +24,7 @@ import type {
   WeightEntry,
   Workout,
 } from '../types';
-import { newId } from '../types';
+import { DEVICE_LOCAL_SETTINGS, newId } from '../types';
 import * as db from '../lib/db';
 import { todayKey as computeTodayKey, weekDateKeys } from '../lib/dates';
 import { computeEffectiveTargets, type EffectiveTargets } from '../lib/targets';
@@ -225,10 +225,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => {
-      const now = Date.now();
-      settingsUpdatedAtRef.current = now;
       setSettings((prev) => {
         const next = { ...prev, ...patch };
+        // Only bump the sync-freshness timestamp when a SYNCED field actually
+        // changed. Logging in writes authToken/authEmail (device-local, never
+        // synced) — stamping "now" for that alone would make a freshly
+        // logged-in device's still-blank profile/API key look newer than the
+        // account's real synced data, so the next push would wipe it out.
+        const changedSyncable = (Object.keys(patch) as (keyof Settings)[]).some(
+          (k) => !DEVICE_LOCAL_SETTINGS.includes(k) && next[k] !== prev[k],
+        );
+        const now = changedSyncable ? Date.now() : settingsUpdatedAtRef.current;
+        if (changedSyncable) settingsUpdatedAtRef.current = now;
         saveSettings(next, now);
         return next;
       });
